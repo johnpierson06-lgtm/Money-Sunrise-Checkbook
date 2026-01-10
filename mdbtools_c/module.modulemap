@@ -1,0 +1,6 @@
+module mdbtools_c [system] {
+  header "MoneyMDBHelpers.h"
+  link "mdb"
+  link "glib-2.0"
+  export *
+}

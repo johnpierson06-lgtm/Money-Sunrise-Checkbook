@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <Group
+      location = "group:CheckbookApp"
+      name = "CheckbookApp">
+      <FileRef
+         location = "group:CheckbookApp-Bridging-Header.h">
+      </FileRef>
+      <FileRef
+         location = "group:AuthManager+MSALSilent.swift">
+      </FileRef>
+      <FileRef
+         location = "group:MainCheckbookView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:Assets.xcassets">
+      </FileRef>
+      <FileRef
+         location = "group:ViewControllerResolver.swift">
+      </FileRef>
+      <FileRef
+         location = "group:OneDriveFileRef.swift">
+      </FileRef>
+      <FileRef
+         location = "group:FileStore.swift">
+      </FileRef>
+      <FileRef
+         location = "group:OneDriveAPI.swift">
+      </FileRef>
+      <FileRef
+         location = "group:OneDriveFileManager.swift">
+      </FileRef>
+      <FileRef
+         location = "group:Account.swift">
+      </FileRef>
+      <FileRef
+         location = "group:CheckbookAppApp.swift">
+      </FileRef>
+      <FileRef
+         location = "group:Info.plist">
+      </FileRef>
+      <FileRef
+         location = "group:FolderBrowserView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:LoginView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:AuthManager.swift">
+      </FileRef>
+      <FileRef
+         location = "group:FileSelectionView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:AccountsView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:TransactionsView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:NewTransactionView.swift">
+      </FileRef>
+      <FileRef
+         location = "group:MoneyDecrypter.swift">
+      </FileRef>
+      <FileRef
+         location = "group:PasswordStore.swift">
+      </FileRef>
+      <FileRef
+         location = "group:MoneyFileService 2.swift">
+      </FileRef>
+      <FileRef
+         location = "group:MoneyModels.swift">
+      </FileRef>
+      <FileRef
+         location = "group:Jet4Decrypter.swift">
+      </FileRef>
+      <FileRef
+         location = "group:MoneyMDB.swift">
+      </FileRef>
+   </Group>
+</Workspace>

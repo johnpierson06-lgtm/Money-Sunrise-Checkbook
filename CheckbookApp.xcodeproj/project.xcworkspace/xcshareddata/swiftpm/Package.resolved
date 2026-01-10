@@ -1,0 +1,24 @@
+{
+  "originHash" : "8273a03099ff3070b96316db097b6a813355651ff7e272ac6cf822695d40c66d",
+  "pins" : [
+    {
+      "identity" : "bigint",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/attaswift/BigInt",
+      "state" : {
+        "revision" : "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
+        "version" : "5.7.0"
+      }
+    },
+    {
+      "identity" : "microsoft-authentication-library-for-objc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AzureAD/microsoft-authentication-library-for-objc",
+      "state" : {
+        "revision" : "231af305ec9c4634f32af0d43a3765b5b00e261d",
+        "version" : "2.6.0"
+      }
+    }
+  ],
+  "version" : 3
+}

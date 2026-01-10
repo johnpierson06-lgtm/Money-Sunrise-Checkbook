@@ -6,14 +6,137 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DC0896272F1204A80014FCCC /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = DC0896262F1204A80014FCCC /* .gitignore */; };
+		DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = DC1C370F2EBC475E008C25B2 /* MSAL */; };
+		DCBB40FC2F09C0E400740D66 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */; };
+		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
+		DCD8B3542F11E44C00153B12 /* MDBToolsWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */; };
+		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DCBB41732F0C87A600740D66 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DC59B7042EB576080090E338 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DCBB415D2F0C707300740D66;
+			remoteInfo = mdbtools_c;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DC1C370D2EBC43E4008C25B2 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DCBB415C2F0C707300740D66 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "include/$(PRODUCT_NAME)";
+			dstSubfolderSpec = 16;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		DC08960F2F11F4A10014FCCC /* CheckbookApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CheckbookApp-Bridging-Header.h"; sourceTree = "<group>"; };
+		DC0896262F1204A80014FCCC /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		DC59B70C2EB576080090E338 /* CheckbookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheckbookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCBB415E2F0C707300740D66 /* libmdbtools_c.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libmdbtools_c.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBToolsWrapper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DC0896032F11F01C0014FCCC /* Exceptions for "mdbtools_c" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				backend.c,
+				catalog.c,
+				data.c,
+				DOUBLE_FREE_FIXED.md,
+				file.c,
+				FINAL_FIX_MONEYHELPERS.md,
+				index.c,
+				like.c,
+				LINKER_ERRORS_FIXED.md,
+				map.c,
+				mdbfakeglib.c,
+				"mdbtools-missing 2.c",
+				money.c,
+				props.c,
+				REALLOCF_FIX.md,
+				sargs.c,
+				SIGNATURE_FIX.md,
+				START_HERE_NEXT_STEPS.md,
+				table.c,
+				TLS_FIX.md,
+				worktable.c,
+				write.c,
+				XCODE_SETUP_CHECKLIST.md,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DC0896042F11F01C0014FCCC /* Exceptions for "mdbtools_c" folder in "mdbtools_c" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				backend.c,
+				catalog.c,
+				data.c,
+				file.c,
+				index.c,
+				like.c,
+				map.c,
+				mdbfakeglib.c,
+				"mdbtools-missing 2.c",
+				money.c,
+				props.c,
+				sargs.c,
+				table.c,
+				worktable.c,
+				write.c,
+			);
+			target = DCBB415D2F0C707300740D66 /* mdbtools_c */;
+		};
+		DC84CADA2EB57BD4001D5CD4 /* Exceptions for "CheckbookApp" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Untitled.swift,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		DC1C36F82EBC410B008C25B2 /* MSAL */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MSAL;
+			sourceTree = "<group>";
+		};
 		DC59B70E2EB576080090E338 /* CheckbookApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DC84CADA2EB57BD4001D5CD4 /* Exceptions for "CheckbookApp" folder in "CheckbookApp" target */,
+			);
 			path = CheckbookApp;
+			sourceTree = "<group>";
+		};
+		DCBB415F2F0C707300740D66 /* mdbtools_c */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DC0896032F11F01C0014FCCC /* Exceptions for "mdbtools_c" folder in "CheckbookApp" target */,
+				DC0896042F11F01C0014FCCC /* Exceptions for "mdbtools_c" folder in "mdbtools_c" target */,
+			);
+			path = mdbtools_c;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -23,17 +146,41 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */,
+				DCBB40FC2F09C0E400740D66 /* mdbtools-wrapper in Frameworks */,
+				DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */,
+				DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DCBB415B2F0C707300740D66 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DC1C37082EBC43E4008C25B2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		DC59B7032EB576080090E338 = {
 			isa = PBXGroup;
 			children = (
 				DC59B70E2EB576080090E338 /* CheckbookApp */,
+				DC1C36F82EBC410B008C25B2 /* MSAL */,
+				DCBB415F2F0C707300740D66 /* mdbtools_c */,
+				DC1C37082EBC43E4008C25B2 /* Frameworks */,
 				DC59B70D2EB576080090E338 /* Products */,
+				DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */,
+				DC08960F2F11F4A10014FCCC /* CheckbookApp-Bridging-Header.h */,
+				DC0896262F1204A80014FCCC /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -41,6 +188,7 @@
 			isa = PBXGroup;
 			children = (
 				DC59B70C2EB576080090E338 /* CheckbookApp.app */,
+				DCBB415E2F0C707300740D66 /* libmdbtools_c.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,20 +203,50 @@
 				DC59B7082EB576080090E338 /* Sources */,
 				DC59B7092EB576080090E338 /* Frameworks */,
 				DC59B70A2EB576080090E338 /* Resources */,
+				DC1C370D2EBC43E4008C25B2 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DC84AC5F2F11D56400CC1A66 /* PBXTargetDependency */,
+				DC84AC5D2F11D56100CC1A66 /* PBXTargetDependency */,
+				DC84AC5B2F11D55A00CC1A66 /* PBXTargetDependency */,
+				DCBB41742F0C87A600740D66 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				DC59B70E2EB576080090E338 /* CheckbookApp */,
 			);
 			name = CheckbookApp;
 			packageProductDependencies = (
+				DC1C370F2EBC475E008C25B2 /* MSAL */,
+				DCF3E3AD2ED6660400B64E60 /* BigInt */,
+				DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */,
 			);
 			productName = CheckbookApp;
 			productReference = DC59B70C2EB576080090E338 /* CheckbookApp.app */;
 			productType = "com.apple.product-type.application";
+		};
+		DCBB415D2F0C707300740D66 /* mdbtools_c */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DCBB41652F0C707300740D66 /* Build configuration list for PBXNativeTarget "mdbtools_c" */;
+			buildPhases = (
+				DCBB415A2F0C707300740D66 /* Sources */,
+				DCBB415B2F0C707300740D66 /* Frameworks */,
+				DCBB415C2F0C707300740D66 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DCBB415F2F0C707300740D66 /* mdbtools_c */,
+			);
+			name = mdbtools_c;
+			packageProductDependencies = (
+			);
+			productName = mdbtools_c;
+			productReference = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */;
+			productType = "com.apple.product-type.library.static";
 		};
 /* End PBXNativeTarget section */
 
@@ -82,6 +260,10 @@
 				TargetAttributes = {
 					DC59B70B2EB576080090E338 = {
 						CreatedOnToolsVersion = 26.0.1;
+						LastSwiftMigration = 2610;
+					};
+					DCBB415D2F0C707300740D66 = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -94,12 +276,18 @@
 			);
 			mainGroup = DC59B7032EB576080090E338;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */,
+				DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */,
+				DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC59B70D2EB576080090E338 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				DC59B70B2EB576080090E338 /* CheckbookApp */,
+				DCBB415D2F0C707300740D66 /* mdbtools_c */,
 			);
 		};
 /* End PBXProject section */
@@ -109,6 +297,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC0896272F1204A80014FCCC /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,10 +308,38 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCD8B3542F11E44C00153B12 /* MDBToolsWrapper.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DCBB415A2F0C707300740D66 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DC84AC5B2F11D55A00CC1A66 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = DC84AC5A2F11D55A00CC1A66 /* MSAL */;
+		};
+		DC84AC5D2F11D56100CC1A66 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = DC84AC5C2F11D56100CC1A66 /* BigInt */;
+		};
+		DC84AC5F2F11D56400CC1A66 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = DC84AC5E2F11D56400CC1A66 /* mdbtools-wrapper */;
+		};
+		DCBB41742F0C87A600740D66 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DCBB415D2F0C707300740D66 /* mdbtools_c */;
+			targetProxy = DCBB41732F0C87A600740D66 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		DC59B7152EB576090090E338 /* Debug */ = {
@@ -251,29 +468,43 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = CheckbookApp/CheckbookApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = AQP8DAYPRN;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "";
+				INFOPLIST_FILE = /Users/johnpierson/Documents/CheckbookApp/CheckbookApp/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GetToIt.CheckbookApp;
+				PRODUCT_BUNDLE_IDENTIFIER = mycheckbookapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/mdbtools_c";
+				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp/CheckbookApp-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				SYSTEM_HEADER_SEARCH_PATHS = "/opt/homebrew/opt/glib/include/glib-2.0";
+				"SYSTEM_HEADER_SEARCH_PATHS[sdk=iphone*]" = (
+					"/opt/homebrew/opt/glib/include/glib-2.0",
+					"/opt/homebrew/opt/glib/lib/glib-2.0/include",
+				);
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -283,29 +514,76 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = CheckbookApp/CheckbookApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = AQP8DAYPRN;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "";
+				INFOPLIST_FILE = /Users/johnpierson/Documents/CheckbookApp/CheckbookApp/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GetToIt.CheckbookApp;
+				PRODUCT_BUNDLE_IDENTIFIER = mycheckbookapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/mdbtools_c";
+				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp/CheckbookApp-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				SYSTEM_HEADER_SEARCH_PATHS = "";
+				"SYSTEM_HEADER_SEARCH_PATHS[sdk=iphone*]" = (
+					"/opt/homebrew/opt/glib/lib/glib-2.0/include",
+					"/opt/homebrew/opt/glib/include/glib-2.0",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		DCBB41662F0C707300740D66 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/mdbtools_c";
+				"HEADER_SEARCH_PATHS[sdk=iphone*]" = (
+					"/Users/johnpierson/mdbtools-wrapper/Sources/mdbtools-c",
+					"/Users/johnpierson/mdbtools-wrapper/Sources/mdbtools-c/include",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DCBB41672F0C707300740D66 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/mdbtools_c";
+				"HEADER_SEARCH_PATHS[sdk=iphone*]" = (
+					"/Users/johnpierson/mdbtools-wrapper/Sources/mdbtools-c/include",
+					"/Users/johnpierson/mdbtools-wrapper/Sources/mdbtools-c/**",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -331,7 +609,74 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		DCBB41652F0C707300740D66 /* Build configuration list for PBXNativeTarget "mdbtools_c" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DCBB41662F0C707300740D66 /* Debug */,
+				DCBB41672F0C707300740D66 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../mdbtools-wrapper";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AzureAD/microsoft-authentication-library-for-objc";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+		DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/attaswift/BigInt";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DC1C370F2EBC475E008C25B2 /* MSAL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */;
+			productName = MSAL;
+		};
+		DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = "mdbtools-wrapper";
+		};
+		DC84AC5A2F11D55A00CC1A66 /* MSAL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */;
+			productName = MSAL;
+		};
+		DC84AC5C2F11D56100CC1A66 /* BigInt */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */;
+			productName = BigInt;
+		};
+		DC84AC5E2F11D56400CC1A66 /* mdbtools-wrapper */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */;
+			productName = "mdbtools-wrapper";
+		};
+		DCF3E3AD2ED6660400B64E60 /* BigInt */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */;
+			productName = BigInt;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DC59B7042EB576080090E338 /* Project object */;
 }
