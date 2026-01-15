@@ -1,4 +1,0 @@
-module mdbtools_c [system] {
-  header "MoneyMDBHelpers.h"
-  export *
-}

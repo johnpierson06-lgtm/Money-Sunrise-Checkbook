@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		DC0896272F1204A80014FCCC /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = DC0896262F1204A80014FCCC /* .gitignore */; };
 		DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = DC1C370F2EBC475E008C25B2 /* MSAL */; };
-		DCBB40FC2F09C0E400740D66 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */; };
+		DC4E48EF2F19920300B37BF9 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */; };
 		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
 		DCD8B3542F11E44C00153B12 /* MDBToolsWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */; };
 		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
@@ -147,8 +147,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */,
-				DCBB40FC2F09C0E400740D66 /* mdbtools-wrapper in Frameworks */,
 				DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */,
+				DC4E48EF2F19920300B37BF9 /* mdbtools-wrapper in Frameworks */,
 				DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -208,7 +208,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				DC84AC5F2F11D56400CC1A66 /* PBXTargetDependency */,
 				DC84AC5D2F11D56100CC1A66 /* PBXTargetDependency */,
 				DC84AC5B2F11D55A00CC1A66 /* PBXTargetDependency */,
 				DCBB41742F0C87A600740D66 /* PBXTargetDependency */,
@@ -220,7 +219,7 @@
 			packageProductDependencies = (
 				DC1C370F2EBC475E008C25B2 /* MSAL */,
 				DCF3E3AD2ED6660400B64E60 /* BigInt */,
-				DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */,
+				DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */,
 			);
 			productName = CheckbookApp;
 			productReference = DC59B70C2EB576080090E338 /* CheckbookApp.app */;
@@ -279,7 +278,7 @@
 			packageReferences = (
 				DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */,
 				DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */,
-				DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */,
+				DC4E48ED2F1991FB00B37BF9 /* XCLocalSwiftPackageReference "../mdbtools-wrapper" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC59B70D2EB576080090E338 /* Products */;
@@ -329,10 +328,6 @@
 		DC84AC5D2F11D56100CC1A66 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			productRef = DC84AC5C2F11D56100CC1A66 /* BigInt */;
-		};
-		DC84AC5F2F11D56400CC1A66 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			productRef = DC84AC5E2F11D56400CC1A66 /* mdbtools-wrapper */;
 		};
 		DCBB41742F0C87A600740D66 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -476,7 +471,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = "";
-				INFOPLIST_FILE = /Users/johnpierson/Documents/CheckbookApp/CheckbookApp/Info.plist;
+				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/CheckbookApp/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -522,7 +517,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = "";
-				INFOPLIST_FILE = /Users/johnpierson/Documents/CheckbookApp/CheckbookApp/Info.plist;
+				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/CheckbookApp/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -621,9 +616,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */ = {
+		DC4E48ED2F1991FB00B37BF9 /* XCLocalSwiftPackageReference "../mdbtools-wrapper" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../mdbtools-wrapper";
+			relativePath = "../mdbtools-wrapper";
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -652,8 +647,9 @@
 			package = DC1C37072EBC428F008C25B2 /* XCRemoteSwiftPackageReference "microsoft-authentication-library-for-objc" */;
 			productName = MSAL;
 		};
-		DC753F3F2EEB631100BCA801 /* mdbtools-wrapper */ = {
+		DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = DC4E48ED2F1991FB00B37BF9 /* XCLocalSwiftPackageReference "../mdbtools-wrapper" */;
 			productName = "mdbtools-wrapper";
 		};
 		DC84AC5A2F11D55A00CC1A66 /* MSAL */ = {
@@ -665,11 +661,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DCF3E3AC2ED6660400B64E60 /* XCRemoteSwiftPackageReference "BigInt" */;
 			productName = BigInt;
-		};
-		DC84AC5E2F11D56400CC1A66 /* mdbtools-wrapper */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DC753F3E2EEB631100BCA801 /* XCLocalSwiftPackageReference "../../mdbtools-wrapper" */;
-			productName = "mdbtools-wrapper";
 		};
 		DCF3E3AD2ED6660400B64E60 /* BigInt */ = {
 			isa = XCSwiftPackageProductDependency;
