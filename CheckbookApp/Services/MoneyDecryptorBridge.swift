@@ -119,23 +119,22 @@ private enum MoneyDecryptorCore {
                 
                 if !Arrays_equals(decrypted4Bytes, baseSalt) {
                     dbg("❌ Password verification FAILED")
-                    dbg("⚠️  This indicates the encryption key is incorrect.")
-                    dbg("    Possible causes:")
-                    dbg("    1. SHA1/MD5 hash is producing wrong output")
-                    dbg("    2. Password encoding (UTF-16LE) is wrong")
-                    dbg("    3. Salt extraction is wrong")
-                    dbg("    4. RC4 implementation is wrong")
+                    dbg("⚠️  The password is incorrect.")
+                    // Throw badPassword error immediately instead of continuing
+                    throw MoneyDecryptorBridgeError.badPassword
                 } else {
                     dbg("✅ Password verification PASSED - encryption key is correct!")
                     passwordVerified = true
                 }
             } else {
-                dbg("⚠️  Test bytes are zeros - cannot verify password")
+                dbg("⚠️  Test bytes are zeros - using alternate validation method")
+                // When test bytes are zeros, we'll verify by trying to decrypt page 1
+                // and checking if it produces valid database structures
+                passwordVerified = false  // Will verify after decrypting page 1
             }
-        }
-        
-        if !passwordVerified {
-            dbg("⚠️  WARNING: Password not verified, decryption may fail!")
+        } else {
+            dbg("⚠️  Test bytes offset out of range - using alternate validation method")
+            passwordVerified = false  // Will verify after decrypting page 1
         }
         
         // Decrypt pages 1-14 (page 0 is NOT encrypted!)
@@ -181,6 +180,32 @@ private enum MoneyDecryptorCore {
                                         .replacingOccurrences(of: "\n", with: "\\n")
                                         .replacingOccurrences(of: "\r", with: "\\r")
                     dbg("Page 1 as ASCII: '\(printable.prefix(100))'")
+                }
+                
+                // Validate password if we couldn't verify with test bytes
+                if !passwordVerified {
+                    dbg("🔍 Validating password by checking page 1 structure...")
+                    // Page 1 should be a valid database page
+                    // First byte should be a valid page type (0x01, 0x02, 0x04, etc.)
+                    let pageType = page[0]
+                    dbg("  Page 1 type byte: 0x\(String(format: "%02X", pageType))")
+                    
+                    // Valid page types in Jet/MSISAM:
+                    // 0x01 = Data page
+                    // 0x02 = Table definition page
+                    // 0x04 = Index page
+                    // If it's something else (like 0x9B from your log), decryption failed
+                    let validPageTypes: Set<UInt8> = [0x01, 0x02, 0x03, 0x04, 0x05]
+                    
+                    if !validPageTypes.contains(pageType) {
+                        dbg("❌ Page 1 validation FAILED - invalid page type 0x\(String(format: "%02X", pageType))")
+                        dbg("⚠️  Expected one of: 0x01, 0x02, 0x03, 0x04, 0x05")
+                        dbg("⚠️  This indicates incorrect password (wrong decryption key)")
+                        throw MoneyDecryptorBridgeError.badPassword
+                    } else {
+                        dbg("✅ Page 1 validation PASSED - valid page type 0x\(String(format: "%02X", pageType))")
+                        passwordVerified = true
+                    }
                 }
             }
             #endif

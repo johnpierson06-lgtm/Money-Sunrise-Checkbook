@@ -5,33 +5,6 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:MoneyFileParser.swift">
-   </FileRef>
-   <FileRef
-      location = "group:MDBTOOLS_IOS_SETUP_GUIDE.md">
-   </FileRef>
-   <FileRef
-      location = "group:ERRORS_FIXED_REFERENCE.md">
-   </FileRef>
-   <FileRef
-      location = "group:MoneyFileParserTests.swift">
-   </FileRef>
-   <FileRef
-      location = "group:SOLUTION_COMPLETE.md">
-   </FileRef>
-   <FileRef
-      location = "group:MoneyFileService.swift">
-   </FileRef>
-   <FileRef
-      location = "group:SUCCESS_FINAL.md">
-   </FileRef>
-   <FileRef
-      location = "group:MoneyFileParser 2.swift">
-   </FileRef>
-   <FileRef
-      location = "group:MONEYFILEPARSER_ADDED.md">
-   </FileRef>
-   <FileRef
-      location = "group:FILES_TO_DELETE.md">
+      location = "group:MSAL_BROKER_FIX.md">
    </FileRef>
 </Workspace>

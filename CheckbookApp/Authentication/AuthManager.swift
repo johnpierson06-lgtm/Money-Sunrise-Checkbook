@@ -47,7 +47,8 @@ final class AuthManager {
 
         let authorityURL = try? MSALAuthority(url: URL(string: self.authority)!)
         let config = MSALPublicClientApplicationConfig(clientId: self.clientId, redirectUri: self.redirectUri, authority: authorityURL)
-        config.cacheConfig.keychainSharingGroup = "com.microsoft.identity.universalstorage" // Ensure this is also added under Keychain Sharing entitlements
+        config.cacheConfig.keychainSharingGroup = "com.microsoft.identity.universalstorage"
+        
         do {
             msalApp = try MSALPublicClientApplication(configuration: config)
         } catch {
@@ -60,14 +61,33 @@ final class AuthManager {
         }
     }
 
+    // MARK: - Broker Response Handling
+    
+    /// Call this from AppDelegate/SceneDelegate when app receives URL callback from broker
+    public func handleBrokerResponse(url: URL) -> Bool {
+        return MSALPublicClientApplication.handleMSALResponse(url, sourceApplication: nil)
+    }
+
     @discardableResult
     public func signIn(scopes: [String], presentingViewController: UIViewController?) async throws -> String {
         #if canImport(UIKit)
         guard let presenter = resolvePresenter(preferred: presentingViewController) else {
             throw NSError(domain: "AuthManager", code: -10, userInfo: [NSLocalizedDescriptionKey: "No presenter available for MSAL web view"])
         }
+        
+        // Clear any cached accounts to force fresh login without broker
+        if let accounts = try? msalApp.allAccounts(), !accounts.isEmpty {
+            for account in accounts {
+                try? msalApp.remove(account)
+            }
+        }
+        
         let webParams = MSALWebviewParameters(authPresentationViewController: presenter)
+        // Force SFSafariViewController to avoid broker
+        webParams.webviewType = .safariViewController
         let parameters = MSALInteractiveTokenParameters(scopes: scopes, webviewParameters: webParams)
+        parameters.promptType = .selectAccount
+        
         #else
         let parameters = MSALInteractiveTokenParameters(scopes: scopes)
         #endif
@@ -76,7 +96,22 @@ final class AuthManager {
             DispatchQueue.main.async {
                 self.msalApp.acquireToken(with: parameters) { (result, error) in
                     if let error = error {
-                        continuation.resume(throwing: error)
+                        // Check if this is the broker error
+                        let nsError = error as NSError
+                        if nsError.domain == "MSALErrorDomain" && nsError.code == -50000 {
+                            // Broker error - provide helpful message
+                            let helpfulError = NSError(
+                                domain: "AuthManager",
+                                code: -50000,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: "Microsoft Authenticator Error",
+                                    NSLocalizedRecoverySuggestionErrorKey: "Please open Microsoft Authenticator app and complete the sign-in there, then return to this app. Or temporarily uninstall Microsoft Authenticator to use browser authentication instead."
+                                ]
+                            )
+                            continuation.resume(throwing: helpfulError)
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
                         return
                     }
                     guard let accessToken = result?.accessToken else {

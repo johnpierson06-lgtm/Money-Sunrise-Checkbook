@@ -10,6 +10,14 @@
 		DC0896272F1204A80014FCCC /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = DC0896262F1204A80014FCCC /* .gitignore */; };
 		DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = DC1C370F2EBC475E008C25B2 /* MSAL */; };
 		DC4E48EF2F19920300B37BF9 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */; };
+		DC4E4A392F1AEE0900B37BF9 /* PASSWORD_PROTECTION_IMPLEMENTATION.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A382F1AEE0900B37BF9 /* PASSWORD_PROTECTION_IMPLEMENTATION.md */; };
+		DC4E4A3B2F1AEE2800B37BF9 /* TESTING_GUIDE.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A3A2F1AEE2800B37BF9 /* TESTING_GUIDE.md */; };
+		DC4E4A3D2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A3C2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md */; };
+		DC4E4A3F2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A3E2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md */; };
+		DC4E4A412F1AEEA500B37BF9 /* QUICK_START.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A402F1AEEA500B37BF9 /* QUICK_START.md */; };
+		DC4E4A432F1AEECD00B37BF9 /* UI_MOCKUP.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */; };
+		DC4E4A452F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */; };
+		DC4E4A472F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */; };
 		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
 		DCD8B3542F11E44C00153B12 /* MDBToolsWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */; };
 		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
@@ -50,6 +58,14 @@
 /* Begin PBXFileReference section */
 		DC08960F2F11F4A10014FCCC /* CheckbookApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CheckbookApp-Bridging-Header.h"; sourceTree = "<group>"; };
 		DC0896262F1204A80014FCCC /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		DC4E4A382F1AEE0900B37BF9 /* PASSWORD_PROTECTION_IMPLEMENTATION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_PROTECTION_IMPLEMENTATION.md; sourceTree = "<group>"; };
+		DC4E4A3A2F1AEE2800B37BF9 /* TESTING_GUIDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = TESTING_GUIDE.md; sourceTree = "<group>"; };
+		DC4E4A3C2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_FLOW_DIAGRAMS.md; sourceTree = "<group>"; };
+		DC4E4A3E2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = IMPLEMENTATION_SUMMARY.md; sourceTree = "<group>"; };
+		DC4E4A402F1AEEA500B37BF9 /* QUICK_START.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = QUICK_START.md; sourceTree = "<group>"; };
+		DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = UI_MOCKUP.md; sourceTree = "<group>"; };
+		DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_VALIDATION_ENHANCEMENT.md; sourceTree = "<group>"; };
+		DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_VALIDATION_FIX.md; sourceTree = "<group>"; };
 		DC59B70C2EB576080090E338 /* CheckbookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheckbookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBB415E2F0C707300740D66 /* libmdbtools_c.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libmdbtools_c.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBToolsWrapper.swift; sourceTree = "<group>"; };
@@ -181,6 +197,14 @@
 				DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */,
 				DC08960F2F11F4A10014FCCC /* CheckbookApp-Bridging-Header.h */,
 				DC0896262F1204A80014FCCC /* .gitignore */,
+				DC4E4A382F1AEE0900B37BF9 /* PASSWORD_PROTECTION_IMPLEMENTATION.md */,
+				DC4E4A3A2F1AEE2800B37BF9 /* TESTING_GUIDE.md */,
+				DC4E4A3C2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md */,
+				DC4E4A3E2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md */,
+				DC4E4A402F1AEEA500B37BF9 /* QUICK_START.md */,
+				DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */,
+				DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */,
+				DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -296,6 +320,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC4E4A392F1AEE0900B37BF9 /* PASSWORD_PROTECTION_IMPLEMENTATION.md in Resources */,
+				DC4E4A472F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md in Resources */,
+				DC4E4A412F1AEEA500B37BF9 /* QUICK_START.md in Resources */,
+				DC4E4A3D2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md in Resources */,
+				DC4E4A452F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md in Resources */,
+				DC4E4A3B2F1AEE2800B37BF9 /* TESTING_GUIDE.md in Resources */,
+				DC4E4A3F2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md in Resources */,
+				DC4E4A432F1AEECD00B37BF9 /* UI_MOCKUP.md in Resources */,
 				DC0896272F1204A80014FCCC /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
