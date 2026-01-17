@@ -30,17 +30,17 @@ class CheckbookAppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct CheckbookAppApp: App {
     @UIApplicationDelegateAdaptor(CheckbookAppDelegate.self) var appDelegate
+    @StateObject private var coordinator = AppCoordinator.shared
     
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                LoginView()
-            }
-            .onOpenURL { url in
-                // Handle URL here for SwiftUI lifecycle
-                print("[CheckbookApp] SwiftUI onOpenURL: \(url)")
-                _ = MSALPublicClientApplication.handleMSALResponse(url, sourceApplication: nil)
-            }
+            SplashScreenView()
+                .environmentObject(coordinator)
+                .onOpenURL { url in
+                    // Handle URL here for SwiftUI lifecycle
+                    print("[CheckbookApp] SwiftUI onOpenURL: \(url)")
+                    _ = MSALPublicClientApplication.handleMSALResponse(url, sourceApplication: nil)
+                }
         }
     }
 }

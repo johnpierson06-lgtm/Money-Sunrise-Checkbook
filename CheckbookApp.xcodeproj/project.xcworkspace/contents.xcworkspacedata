@@ -5,6 +5,24 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:MSAL_BROKER_FIX.md">
+      location = "group:MainFlowView.swift">
+   </FileRef>
+   <FileRef
+      location = "group:REVERT_AND_REAPPLY_SUMMARY.md">
+   </FileRef>
+   <FileRef
+      location = "group:BUILD_CHECKLIST_REVERT.md">
+   </FileRef>
+   <FileRef
+      location = "group:AppCoordinator.swift">
+   </FileRef>
+   <FileRef
+      location = "group:SplashScreenView.swift">
+   </FileRef>
+   <FileRef
+      location = "group:FIX_CHANGE_FILE_NAVIGATION.md">
+   </FileRef>
+   <FileRef
+      location = "group:TEST_CHANGE_FILE_FIX.md">
    </FileRef>
 </Workspace>

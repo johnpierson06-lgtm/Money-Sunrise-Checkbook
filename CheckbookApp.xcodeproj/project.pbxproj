@@ -18,6 +18,7 @@
 		DC4E4A432F1AEECD00B37BF9 /* UI_MOCKUP.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */; };
 		DC4E4A452F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */; };
 		DC4E4A472F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */; };
+		DC4E4EB12F1B33CE00B37BF9 /* FINAL_SOLUTION_SAME_VIEWS.md in Resources */ = {isa = PBXBuildFile; fileRef = DC4E4EB02F1B33CE00B37BF9 /* FINAL_SOLUTION_SAME_VIEWS.md */; };
 		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
 		DCD8B3542F11E44C00153B12 /* MDBToolsWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */; };
 		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
@@ -66,6 +67,7 @@
 		DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = UI_MOCKUP.md; sourceTree = "<group>"; };
 		DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_VALIDATION_ENHANCEMENT.md; sourceTree = "<group>"; };
 		DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PASSWORD_VALIDATION_FIX.md; sourceTree = "<group>"; };
+		DC4E4EB02F1B33CE00B37BF9 /* FINAL_SOLUTION_SAME_VIEWS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FINAL_SOLUTION_SAME_VIEWS.md; sourceTree = "<group>"; };
 		DC59B70C2EB576080090E338 /* CheckbookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheckbookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBB415E2F0C707300740D66 /* libmdbtools_c.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libmdbtools_c.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD8B3532F11E44C00153B12 /* MDBToolsWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBToolsWrapper.swift; sourceTree = "<group>"; };
@@ -205,6 +207,7 @@
 				DC4E4A422F1AEECD00B37BF9 /* UI_MOCKUP.md */,
 				DC4E4A442F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md */,
 				DC4E4A462F1AF1FF00B37BF9 /* PASSWORD_VALIDATION_FIX.md */,
+				DC4E4EB02F1B33CE00B37BF9 /* FINAL_SOLUTION_SAME_VIEWS.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -326,6 +329,7 @@
 				DC4E4A3D2F1AEE5800B37BF9 /* PASSWORD_FLOW_DIAGRAMS.md in Resources */,
 				DC4E4A452F1AF0AD00B37BF9 /* PASSWORD_VALIDATION_ENHANCEMENT.md in Resources */,
 				DC4E4A3B2F1AEE2800B37BF9 /* TESTING_GUIDE.md in Resources */,
+				DC4E4EB12F1B33CE00B37BF9 /* FINAL_SOLUTION_SAME_VIEWS.md in Resources */,
 				DC4E4A3F2F1AEE9000B37BF9 /* IMPLEMENTATION_SUMMARY.md in Resources */,
 				DC4E4A432F1AEECD00B37BF9 /* UI_MOCKUP.md in Resources */,
 				DC0896272F1204A80014FCCC /* .gitignore in Resources */,

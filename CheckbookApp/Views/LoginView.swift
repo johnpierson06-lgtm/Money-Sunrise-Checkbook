@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct LoginView: View {
+struct LegacyLoginView: View {
     @State private var isSignedIn = false
     @State private var errorMessage: String?
     @State private var presenterVC: UIViewController? = nil
@@ -57,6 +57,6 @@ struct LoginView: View {
 
 struct LoginView_Previews: PreviewProvider {
     static var previews: some View {
-        LoginView()
+        LegacyLoginView()
     }
 }

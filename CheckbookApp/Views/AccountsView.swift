@@ -9,6 +9,10 @@ struct UIAccount: Identifiable, Hashable {
 }
 
 struct AccountsView: View {
+    var hasLRDFile: Bool = false  // Flag to indicate .lrd file exists
+    var isReadOnly: Bool = false  // Flag to prevent edits
+    
+    @EnvironmentObject var coordinator: AppCoordinator
     @State private var accounts: [UIAccount] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -17,7 +21,7 @@ struct AccountsView: View {
     @State private var enteredPassword = ""
     @State private var isProcessingPassword = false
     @State private var presenterVC: UIViewController? = nil
-    @State private var passwordErrorMessage: String? = nil  // NEW: Track password errors
+    @State private var passwordErrorMessage: String? = nil  // Track password errors
 
     var body: some View {
         NavigationStack {
@@ -75,6 +79,24 @@ struct AccountsView: View {
             }
             .navigationTitle("Accounts")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        Button(role: .destructive) {
+                            changeFile()
+                        } label: {
+                            Label("Change File", systemImage: "folder")
+                        }
+                        
+                        Button(role: .destructive) {
+                            signOut()
+                        } label: {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Refresh") {
                         refreshAccounts()
@@ -86,6 +108,8 @@ struct AccountsView: View {
                 PasswordPromptView(
                     password: $enteredPassword,
                     errorMessage: passwordErrorMessage,  // Pass error message
+                    hasLRDWarning: hasLRDFile,  // Pass LRD warning flag
+                    isReadOnly: isReadOnly,  // Pass read-only flag
                     onSubmit: { password in
                         passwordErrorMessage = nil  // Clear error on new attempt
                         handlePasswordSubmit(password: password)
@@ -216,9 +240,52 @@ struct AccountsView: View {
                     self.errorMessage = "Failed to refresh file: \(error.localizedDescription)"
                     self.isLoading = false
                 } else {
-                    // After refresh, prompt for password again
+                    // After refresh, check for LRD file again (in case it changed)
+                    self.checkForLRDFile()
+                    // Then prompt for password again
                     self.showPasswordPrompt = true
                 }
+            }
+        }
+    }
+    
+    private func changeFile() {
+        print("[AccountsView] 🔄 Change file requested")
+        
+        // Use coordinator to reset back to file selection
+        coordinator.requestChangeFile()
+    }
+    
+    private func signOut() {
+        print("[AccountsView] 🚪 Sign out requested")
+        coordinator.requestSignOut()
+    }
+    
+    private func checkForLRDFile() {
+        guard let fileName = OneDriveFileManager.shared.getSavedFileName(),
+              let parentFolderId = OneDriveFileManager.shared.getSavedParentFolderId() else {
+            return
+        }
+        
+        // Create the .lrd filename
+        let lrdFileName = fileName.replacingOccurrences(of: ".mny", with: ".lrd")
+        
+        // Get token and check for LRD file
+        AuthManager.shared.acquireTokenSilent(scopes: ["Files.Read", "Files.ReadWrite"]) { token, error in
+            guard let token = token else { return }
+            
+            OneDriveAPI.listChildren(accessToken: token, folderId: parentFolderId) { result in
+                // Note: We can't update hasLRDFile and isReadOnly because they're let properties
+                // This check is informational - the actual LRD check happens before navigating here
+                #if DEBUG
+                switch result {
+                case .success(let items):
+                    let hasLRD = items.contains(where: { $0.name.lowercased() == lrdFileName.lowercased() })
+                    print("[AccountsView] LRD file refresh check: \(hasLRD ? "Found" : "Not found")")
+                case .failure(let error):
+                    print("[AccountsView] Error checking for LRD file: \(error.localizedDescription)")
+                }
+                #endif
             }
         }
     }
@@ -228,7 +295,9 @@ struct AccountsView: View {
 
 struct PasswordPromptView: View {
     @Binding var password: String
-    let errorMessage: String?  // NEW: Optional error message to display
+    let errorMessage: String?  // Optional error message to display
+    let hasLRDWarning: Bool  // NEW: Flag to show .lrd file warning
+    let isReadOnly: Bool  // NEW: Flag indicating read-only mode
     let onSubmit: (String) -> Void
     let onCancel: () -> Void
     
@@ -239,9 +308,9 @@ struct PasswordPromptView: View {
         NavigationStack {
             VStack(spacing: 24) {
                 // Icon
-                Image(systemName: errorMessage != nil ? "exclamationmark.triangle.fill" : "lock.shield.fill")
+                Image(systemName: errorMessage != nil ? "exclamationmark.triangle.fill" : (hasLRDWarning ? "exclamationmark.lock.fill" : "lock.shield.fill"))
                     .font(.system(size: 60))
-                    .foregroundColor(errorMessage != nil ? .red : .blue)
+                    .foregroundColor(errorMessage != nil ? .red : (hasLRDWarning ? .orange : .blue))
                     .padding(.top, 40)
                 
                 // Title and description
@@ -263,6 +332,33 @@ struct PasswordPromptView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
+                }
+                
+                // LRD Warning (if applicable)
+                if hasLRDWarning {
+                    HStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("File May Be Open on Another Device")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                            
+                            if isReadOnly {
+                                Text("This file will be opened in read-only mode.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
                 }
                 
                 // Password field
@@ -304,11 +400,11 @@ struct PasswordPromptView: View {
                     Button {
                         handleSubmit()
                     } label: {
-                        Text("Continue")
+                        Text(isReadOnly ? "Open (Read-Only)" : "Continue")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
+                            .background(isReadOnly ? Color.orange : Color.blue)
                             .foregroundColor(.white)
                             .cornerRadius(12)
                     }
