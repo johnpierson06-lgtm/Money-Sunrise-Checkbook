@@ -83,11 +83,14 @@ struct MoneyFileParser {
     /// Column mapping:
     /// - htrn: unique transaction identifier (Int)
     /// - hacct: account ID (Int)
-    /// - dtrans: transaction date
+    /// - dt: transaction date
     /// - amt: transaction amount (Decimal, can be positive or negative)
-    /// - hpay: payee ID (Int, optional)
+    /// - lHpay: payee ID (Int, optional)
     /// - hcat: category ID (Int, optional)
-    /// - szMemo: memo text (String, optional)
+    /// - mMemo: memo text (String, optional)
+    /// - frq: frequency (-1 = posted, 3 = recurring schedule)
+    /// - grftt: transaction type flags (bit 6 = split detail)
+    /// - iinst: instance number for recurring transactions
     func parseTransactions(forAccount accountId: Int? = nil) throws -> [MoneyTransaction] {
         do {
             let rows = try parser.readTable("TRN")
@@ -129,14 +132,14 @@ struct MoneyFileParser {
                 amount = 0
             }
             
-            // Extract dtrans (transaction date)
-            let date = parseDate(row["dtrans"])
+            // Extract dt (transaction date)
+            let date = parseDate(row["dt"])
             
-            // Extract hpay (payee ID, optional)
+            // Extract lHpay (payee ID, optional) - note: this is column 58 in schema
             let payeeId: Int? = {
-                guard let hpayStr = row["hpay"],
-                      !hpayStr.isEmpty else { return nil }
-                return Int(hpayStr)
+                guard let lHpayStr = row["lHpay"],
+                      !lHpayStr.isEmpty else { return nil }
+                return Int(lHpayStr)
             }()
             
             // Extract hcat (category ID, optional)
@@ -146,8 +149,42 @@ struct MoneyFileParser {
                 return Int(hcatStr)
             }()
             
-            // Extract szMemo (memo, optional)
-            let memo = row["szMemo"]
+            // Extract mMemo (memo, optional)
+            let memo = row["mMemo"]
+            
+            // Extract frq (frequency)
+            let frequency: Int = {
+                guard let frqStr = row["frq"],
+                      !frqStr.isEmpty,
+                      let frq = Int(frqStr) else { return -1 }
+                return frq
+            }()
+            
+            // Extract grftt (transaction type flags)
+            let transactionTypeFlags: Int = {
+                guard let grfttStr = row["grftt"],
+                      !grfttStr.isEmpty,
+                      let grftt = Int(grfttStr) else { return 0 }
+                return grftt
+            }()
+            
+            // Extract iinst (instance number for recurring transactions)
+            // Note: -1 means "not set" in Money database, treat it as nil
+            let instanceNumber: Int? = {
+                guard let iinstStr = row["iinst"],
+                      !iinstStr.isEmpty,
+                      let iinst = Int(iinstStr),
+                      iinst >= 0 else { return nil }  // -1 or negative = nil
+                return iinst
+            }()
+            
+            #if DEBUG
+            // Log filtering for account 2 to debug balance calculation
+            if hacct == 2 && frequency == -1 {
+                let shouldCount = transactionTypeFlags < 64 || instanceNumber != nil
+                print("[MoneyFileParser] htrn=\(htrn) amt=\(amount) frq=\(frequency) grftt=\(transactionTypeFlags) iinst=\(instanceNumber?.description ?? "nil") shouldCount=\(shouldCount)")
+            }
+            #endif
             
             transactions.append(MoneyTransaction(
                 id: htrn,
@@ -156,7 +193,10 @@ struct MoneyFileParser {
                 amount: amount,
                 payeeId: payeeId,
                 categoryId: categoryId,
-                memo: memo
+                memo: memo,
+                frequency: frequency,
+                transactionTypeFlags: transactionTypeFlags,
+                instanceNumber: instanceNumber
             ))
         }
         

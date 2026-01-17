@@ -200,8 +200,11 @@ public enum MoneyFileService {
             accountBalances[account.id] = account.beginningBalance
         }
         
-        // Add transaction amounts
+        // Add transaction amounts (only counting posted transactions, not split details or future scheduled instances)
         for transaction in transactions {
+            // Only count transactions that should be included in balance
+            guard transaction.shouldCountInBalance else { continue }
+            
             if let currentBalance = accountBalances[transaction.accountId] {
                 accountBalances[transaction.accountId] = currentBalance + transaction.amount
             }
