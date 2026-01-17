@@ -150,7 +150,30 @@ struct MoneyFileParser {
             }()
             
             // Extract mMemo (memo, optional)
-            let memo = row["mMemo"]
+            // Memo fields can contain corrupted data or special encoding - sanitize it
+            let memo: String? = {
+                guard let mMemo = row["mMemo"],
+                      !mMemo.isEmpty else { return nil }
+                
+                // Filter out corrupted/invalid UTF-8 sequences
+                // If the string contains only "?" characters, it's corrupted - return nil
+                let questionMarkCount = mMemo.filter { $0 == "?" }.count
+                if questionMarkCount > 3 && questionMarkCount == mMemo.count {
+                    return nil // All question marks = corrupted
+                }
+                
+                // Replace any invalid characters with empty string
+                let cleaned = mMemo.filter { char in
+                    char.unicodeScalars.allSatisfy { scalar in
+                        // Keep printable ASCII and common Unicode
+                        (scalar.value >= 32 && scalar.value < 127) || // Printable ASCII
+                        (scalar.value >= 128 && scalar.value < 55296) || // Common Unicode
+                        (scalar.value >= 57344 && scalar.value < 65536) // More Unicode
+                    }
+                }
+                
+                return cleaned.isEmpty ? nil : cleaned
+            }()
             
             // Extract frq (frequency)
             let frequency: Int = {
@@ -208,7 +231,9 @@ struct MoneyFileParser {
     /// Parse categories from the CAT table
     /// Column mapping:
     /// - hcat: unique category identifier (Int)
-    /// - szName: category name (String)
+    /// - szFull: full category name (String)
+    /// - hcatParent: parent category ID (Int, optional)
+    /// - nLevel: hierarchy level (Int)
     func parseCategories() throws -> [MoneyCategory] {
         do {
             let rows = try parser.readTable("CAT")
@@ -228,13 +253,31 @@ struct MoneyFileParser {
                 continue
             }
             
-            // Extract szName (category name)
-            let szName = row["szName"] ?? ""
-            guard !szName.isEmpty else { continue }
+            // Extract szFull (category name)
+            let szFull = row["szFull"] ?? ""
+            guard !szFull.isEmpty else { continue }
+            
+            // Extract hcatParent (parent category ID, optional)
+            let parentId: Int? = {
+                guard let parentStr = row["hcatParent"],
+                      !parentStr.isEmpty,
+                      let parent = Int(parentStr),
+                      parent >= 0 else { return nil }
+                return parent
+            }()
+            
+            // Extract nLevel (hierarchy level)
+            let level: Int = {
+                guard let levelStr = row["nLevel"],
+                      let lvl = Int(levelStr) else { return 0 }
+                return lvl
+            }()
             
             categories.append(MoneyCategory(
                 id: hcat,
-                name: szName
+                name: szFull,
+                parentId: parentId,
+                level: level
             ))
         }
         
@@ -246,7 +289,7 @@ struct MoneyFileParser {
     /// Parse payees from the PAY table
     /// Column mapping:
     /// - hpay: unique payee identifier (Int)
-    /// - szName: payee name (String)
+    /// - szFull: full payee name (String)
     func parsePayees() throws -> [MoneyPayee] {
         do {
             let rows = try parser.readTable("PAY")
@@ -266,13 +309,13 @@ struct MoneyFileParser {
                 continue
             }
             
-            // Extract szName (payee name)
-            let szName = row["szName"] ?? ""
-            guard !szName.isEmpty else { continue }
+            // Extract szFull (payee name)
+            let szFull = row["szFull"] ?? ""
+            guard !szFull.isEmpty else { continue }
             
             payees.append(MoneyPayee(
                 id: hpay,
-                name: szName
+                name: szFull
             ))
         }
         
@@ -299,24 +342,35 @@ struct MoneyFileParser {
             return Date()
         }
         
+        // Try parsing as OLE automation date first (most common in Money files)
+        if let oleDate = Double(dateString) {
+            return oleAutomationDateToDate(oleDate)
+        }
+        
         // Try various date formats
         let formatters: [DateFormatter] = [
-            // Standard format with time
+            // Standard format with time (4-digit year)
             {
                 let f = DateFormatter()
                 f.dateFormat = "MM/dd/yyyy HH:mm:ss"
                 return f
             }(),
-            // Short format
+            // Short format with time (2-digit year)
             {
                 let f = DateFormatter()
                 f.dateFormat = "MM/dd/yy HH:mm:ss"
                 return f
             }(),
-            // Date only
+            // Date only (4-digit year)
             {
                 let f = DateFormatter()
                 f.dateFormat = "MM/dd/yyyy"
+                return f
+            }(),
+            // Date only (2-digit year)
+            {
+                let f = DateFormatter()
+                f.dateFormat = "MM/dd/yy"
                 return f
             }(),
             // ISO 8601
@@ -329,13 +383,16 @@ struct MoneyFileParser {
         
         for formatter in formatters {
             if let date = formatter.date(from: dateString) {
+                // Fix 2-digit year issue: if year is < 100, add 2000
+                let calendar = Calendar.current
+                let year = calendar.component(.year, from: date)
+                if year < 100 {
+                    var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+                    components.year = 2000 + year
+                    return calendar.date(from: components) ?? date
+                }
                 return date
             }
-        }
-        
-        // If all else fails, try parsing as OLE automation date
-        if let oleDate = Double(dateString) {
-            return oleAutomationDateToDate(oleDate)
         }
         
         return Date()

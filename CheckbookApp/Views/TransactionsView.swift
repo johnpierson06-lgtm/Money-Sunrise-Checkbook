@@ -4,10 +4,12 @@ import Foundation
 struct TransactionsView: View {
     let account: UIAccount
     
-    @State private var transactions: [MoneyTransaction] = []
+    @State private var transactions: [TransactionDetail] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showingNewTransaction = false
+    @State private var currentPage = 0
+    private let pageSize = 10
     
     var body: some View {
         Group {
@@ -36,14 +38,28 @@ struct TransactionsView: View {
                         .foregroundColor(.gray)
                     Text("No Transactions")
                         .font(.headline)
-                    Text("This account has no transactions yet.")
+                    Text("This account has no posted transactions yet.")
                         .foregroundColor(.secondary)
                 }
                 .padding()
             } else {
                 List {
-                    ForEach(transactions) { transaction in
+                    ForEach(paginatedTransactions) { transaction in
                         TransactionRow(transaction: transaction)
+                    }
+                    
+                    // Load more button
+                    if hasMorePages {
+                        Button {
+                            currentPage += 1
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Load More")
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                        }
                     }
                 }
             }
@@ -67,36 +83,73 @@ struct TransactionsView: View {
         }
     }
     
-    // FIXED: Simplified to avoid Swift compiler crash
+    private var paginatedTransactions: [TransactionDetail] {
+        let endIndex = min((currentPage + 1) * pageSize, transactions.count)
+        return Array(transactions[0..<endIndex])
+    }
+    
+    private var hasMorePages: Bool {
+        (currentPage + 1) * pageSize < transactions.count
+    }
+    
     private func loadTransactions() {
         isLoading = true
         errorMessage = nil
+        currentPage = 0
         
         // Use background queue to avoid blocking UI
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                _ = try MoneyFileService.ensureLocalFile()
-                let decryptedData = try MoneyFileService.decryptFile()
-                let allTransactions = try MoneyFileService.parseTransactions(from: decryptedData)
+                let url = try MoneyFileService.ensureLocalFile()
+                let password = (try? PasswordStore.shared.load()) ?? ""
+                let decryptedPath = try MoneyDecryptorBridge.decryptToTempFile(fromFile: url.path, password: password)
                 
-                // Filter by account ID - both are Int types
+                let parser = MoneyFileParser(filePath: decryptedPath)
+                
+                // Parse all needed data
+                let allTransactions = try parser.parseTransactions()
+                let categories = try parser.parseCategories()
+                let payees = try parser.parsePayees()
+                
+                // Create lookup dictionaries
+                let categoryLookup = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+                let payeeLookup = Dictionary(uniqueKeysWithValues: payees.map { ($0.id, $0) })
+                
+                // Filter posted transactions for this account
                 let filtered = allTransactions.filter { transaction in
-                    transaction.accountId == account.id
+                    transaction.accountId == account.id && transaction.shouldCountInBalance
                 }
                 
                 // Sort by date (newest first)
                 let sorted = filtered.sorted { $0.date > $1.date }
                 
+                // Convert to TransactionDetail with names
+                let details = sorted.map { transaction in
+                    TransactionDetail(
+                        transaction: transaction,
+                        payees: payeeLookup,
+                        categories: categoryLookup
+                    )
+                }
+                
                 // Update UI on main thread
                 DispatchQueue.main.async {
-                    self.transactions = sorted
+                    self.transactions = details
                     self.isLoading = false
+                    
+                    #if DEBUG
+                    print("[TransactionsView] Loaded \(details.count) posted transactions for account \(account.id)")
+                    #endif
                 }
             } catch {
                 // Update UI on main thread
                 DispatchQueue.main.async {
                     self.errorMessage = error.localizedDescription
                     self.isLoading = false
+                    
+                    #if DEBUG
+                    print("[TransactionsView] Error loading transactions: \(error)")
+                    #endif
                 }
             }
         }
@@ -104,23 +157,58 @@ struct TransactionsView: View {
 }
 
 struct TransactionRow: View {
-    let transaction: MoneyTransaction
+    let transaction: TransactionDetail
+    
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM dd, yyyy"
+        return formatter.string(from: transaction.date)
+    }
     
     var body: some View {
-        HStack {
+        HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.date, style: .date)
+                // Date
+                Text(formattedDate)
                     .font(.headline)
+                
+                // Payee
+                if let payee = transaction.payeeName {
+                    Text(payee)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                }
+                
+                // Category - with debug
+                if let category = transaction.categoryName {
+                    Text(category)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .onAppear {
+                            #if DEBUG
+                            print("[TransactionRow] Displaying category: '\(category)' (bytes: \(Array(category.utf8)))")
+                            #endif
+                        }
+                }
+                
+                // Memo
                 if let memo = transaction.memo, !memo.isEmpty {
                     Text(memo)
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundColor(.secondary)
+                        .italic()
+                        .onAppear {
+                            #if DEBUG
+                            print("[TransactionRow] Memo: '\(memo)' (bytes: \(Array(memo.utf8)))")
+                            #endif
+                        }
                 }
             }
             
             Spacer()
             
-            Text(transaction.amount, format: .currency(code: "USD"))
+            // Amount
+            Text(transaction.amount, format: .currency(code: Locale.current.currencyCode ?? "USD"))
                 .font(.headline)
                 .foregroundColor(transaction.amount >= 0 ? .green : .red)
         }
