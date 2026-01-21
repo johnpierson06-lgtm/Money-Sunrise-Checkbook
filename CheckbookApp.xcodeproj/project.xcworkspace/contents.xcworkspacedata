@@ -5,24 +5,21 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:MainFlowView.swift">
+      location = "group:LocalDatabaseManager.swift">
    </FileRef>
    <FileRef
-      location = "group:REVERT_AND_REAPPLY_SUMMARY.md">
+      location = "group:LocalModels.swift">
    </FileRef>
    <FileRef
-      location = "group:BUILD_CHECKLIST_REVERT.md">
+      location = "group:NewTransactionView.swift">
    </FileRef>
    <FileRef
-      location = "group:AppCoordinator.swift">
+      location = "group:AccountBalanceService.swift">
    </FileRef>
    <FileRef
-      location = "group:SplashScreenView.swift">
+      location = "group:PHASE_1_IMPLEMENTATION.md">
    </FileRef>
    <FileRef
-      location = "group:FIX_CHANGE_FILE_NAVIGATION.md">
-   </FileRef>
-   <FileRef
-      location = "group:TEST_CHANGE_FILE_FIX.md">
+      location = "group:QUICK_START_PHASE_1.md">
    </FileRef>
 </Workspace>

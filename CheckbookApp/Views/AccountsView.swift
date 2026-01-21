@@ -6,6 +6,7 @@ struct UIAccount: Identifiable, Hashable {
     let name: String
     let openingBalance: Decimal
     var currentBalance: Decimal
+    var hasUnsyncedTransactions: Bool = false
 }
 
 struct AccountsView: View {
@@ -69,9 +70,24 @@ struct AccountsView: View {
                     List(accounts) { account in
                         NavigationLink(destination: TransactionsView(account: account)) {
                             HStack {
-                                Text(account.name)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(account.name)
+                                    
+                                    if account.hasUnsyncedTransactions {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .font(.caption2)
+                                            Text("includes unsynced transactions")
+                                                .font(.caption2)
+                                        }
+                                        .foregroundColor(.orange)
+                                    }
+                                }
+                                
                                 Spacer()
+                                
                                 Text(NSDecimalNumber(decimal: account.currentBalance).doubleValue, format: .currency(code: Locale.current.currencyCode ?? "USD"))
+                                    .foregroundColor(account.hasUnsyncedTransactions ? .orange : .primary)
                             }
                         }
                     }
@@ -174,13 +190,18 @@ struct AccountsView: View {
                 // Proceed to decrypt and parse
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        // Use MoneyFileService to read accounts
-                        // This will use the password from PasswordStore
-                        let summaries = try MoneyFileService.readAccountSummaries()
+                        // Use AccountBalanceService to get balances with local transactions
+                        let enhancedSummaries = try AccountBalanceService.readAccountSummariesWithLocal()
                         
-                        // Map to UIAccount with calculated current balance
-                        let uiAccounts = summaries.map { s in
-                            UIAccount(id: s.id, name: s.name, openingBalance: s.beginningBalance, currentBalance: s.currentBalance)
+                        // Map to UIAccount
+                        let uiAccounts = enhancedSummaries.map { s in
+                            UIAccount(
+                                id: s.id,
+                                name: s.name,
+                                openingBalance: s.beginningBalance,
+                                currentBalance: s.currentBalance,
+                                hasUnsyncedTransactions: s.hasUnsyncedTransactions
+                            )
                         }
                         
                         DispatchQueue.main.async {
@@ -190,6 +211,10 @@ struct AccountsView: View {
                             
                             #if DEBUG
                             print("[AccountsView] ✅ Successfully loaded \(uiAccounts.count) accounts")
+                            let totalUnsynced = uiAccounts.filter { $0.hasUnsyncedTransactions }.count
+                            if totalUnsynced > 0 {
+                                print("[AccountsView] ⚠️ \(totalUnsynced) accounts have unsynced transactions")
+                            }
                             #endif
                         }
                     } catch {

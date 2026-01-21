@@ -5,6 +5,7 @@ struct TransactionsView: View {
     let account: UIAccount
     
     @State private var transactions: [TransactionDetail] = []
+    @State private var localTransactions: [TransactionDetail] = []  // From local DB
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showingNewTransaction = false
@@ -31,33 +32,53 @@ struct TransactionsView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding()
-            } else if transactions.isEmpty {
+            } else if transactions.isEmpty && localTransactions.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "doc.text")
                         .font(.largeTitle)
                         .foregroundColor(.gray)
                     Text("No Transactions")
                         .font(.headline)
-                    Text("This account has no posted transactions yet.")
+                    Text("Tap + to add your first transaction.")
                         .foregroundColor(.secondary)
                 }
                 .padding()
             } else {
                 List {
-                    ForEach(paginatedTransactions) { transaction in
-                        TransactionRow(transaction: transaction)
+                    // Show local transactions first (unsynced)
+                    if !localTransactions.isEmpty {
+                        Section {
+                            ForEach(paginatedLocalTransactions) { transaction in
+                                TransactionRow(transaction: transaction, isLocal: true)
+                            }
+                        } header: {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Unsynced Transactions")
+                            }
+                        }
                     }
                     
-                    // Load more button
-                    if hasMorePages {
-                        Button {
-                            currentPage += 1
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text("Load More")
-                                    .foregroundColor(.blue)
-                                Spacer()
+                    // Show synced transactions from file
+                    if !transactions.isEmpty {
+                        Section(localTransactions.isEmpty ? "" : "Synced Transactions") {
+                            ForEach(paginatedTransactions) { transaction in
+                                TransactionRow(transaction: transaction, isLocal: false)
+                            }
+                            
+                            // Load more button
+                            if hasMorePages {
+                                Button {
+                                    currentPage += 1
+                                } label: {
+                                    HStack {
+                                        Spacer()
+                                        Text("Load More")
+                                            .foregroundColor(.blue)
+                                        Spacer()
+                                    }
+                                }
                             }
                         }
                     }
@@ -81,6 +102,18 @@ struct TransactionsView: View {
         .onAppear {
             loadTransactions()
         }
+        .onChange(of: showingNewTransaction) { oldValue, newValue in
+            // Reload when sheet is dismissed
+            print("🔄 Sheet state changed: \(oldValue) -> \(newValue)")
+            if oldValue && !newValue {
+                print("📥 Reloading transactions after sheet dismissed...")
+                loadTransactions()
+            }
+        }
+    }
+    
+    private var paginatedLocalTransactions: [TransactionDetail] {
+        return localTransactions  // Show all local transactions
     }
     
     private var paginatedTransactions: [TransactionDetail] {
@@ -132,13 +165,40 @@ struct TransactionsView: View {
                     )
                 }
                 
+                // Load local transactions
+                let localTxns = try LocalDatabaseManager.shared.getUnsyncedTransactions()
+                print("🔍 Got \(localTxns.count) unsynced transactions from database")
+                let localFiltered = localTxns.filter { $0.hacct == account.id }
+                print("🔍 Filtered to \(localFiltered.count) for account \(account.id)")
+                
+                // Convert local transactions to TransactionDetail
+                // We'll create simplified MoneyTransaction objects for display
+                let localDetails = localFiltered.map { localTxn -> TransactionDetail in
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "MM/dd/yy HH:mm:ss"
+                    let date = dateFormatter.date(from: localTxn.dt) ?? Date()
+                    
+                    let payeeName = localTxn.lHpay.flatMap { payeeLookup[$0]?.name }
+                    let categoryName = localTxn.hcat.flatMap { categoryLookup[$0]?.name }
+                    
+                    return TransactionDetail(
+                        id: localTxn.htrn,
+                        date: date,
+                        amount: localTxn.amt,
+                        payeeName: payeeName,
+                        categoryName: categoryName,
+                        memo: localTxn.mMemo
+                    )
+                }.sorted { $0.date > $1.date }
+                
                 // Update UI on main thread
                 DispatchQueue.main.async {
                     self.transactions = details
+                    self.localTransactions = localDetails
                     self.isLoading = false
                     
                     #if DEBUG
-                    print("[TransactionsView] Loaded \(details.count) posted transactions for account \(account.id)")
+                    print("[TransactionsView] Loaded \(details.count) synced + \(localDetails.count) local transactions for account \(account.id)")
                     #endif
                 }
             } catch {
@@ -158,6 +218,7 @@ struct TransactionsView: View {
 
 struct TransactionRow: View {
     let transaction: TransactionDetail
+    let isLocal: Bool
     
     private var formattedDate: String {
         let formatter = DateFormatter()
@@ -168,9 +229,18 @@ struct TransactionRow: View {
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                // Date
-                Text(formattedDate)
-                    .font(.headline)
+                HStack(spacing: 4) {
+                    // Date
+                    Text(formattedDate)
+                        .font(.headline)
+                    
+                    // Unsynced indicator
+                    if isLocal {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
                 
                 // Payee
                 if let payee = transaction.payeeName {
