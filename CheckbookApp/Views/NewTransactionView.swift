@@ -66,7 +66,7 @@ struct NewTransactionView: View {
                         HStack {
                             if let category = selectedCategory {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(category.category.name)
+                                    Text(category.displayPath)
                                         .foregroundColor(.primary)
                                     Text(category.isExpense ? "Expense" : "Income")
                                         .font(.caption)
@@ -396,6 +396,7 @@ struct NewTransactionView: View {
 struct CategoryWithType: Identifiable {
     let category: MoneyCategory
     let isExpense: Bool  // true if parent/grandparent is 131 (EXPENSE), false if 130 (INCOME)
+    let displayPath: String  // Full path like "Automobile : Gasoline"
     
     var id: Int { category.id }
 }
@@ -419,7 +420,7 @@ struct CategoryPickerView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(categoryWithType.category.name)
+                                Text(categoryWithType.displayPath)
                                     .foregroundColor(.primary)
                                 
                                 HStack(spacing: 4) {
@@ -463,22 +464,57 @@ struct CategoryPickerView: View {
             cat.name != "INCOME" && cat.name != "EXPENSE"
         }
         
-        // Map to CategoryWithType
+        // Map to CategoryWithType with full path
         let categoriesWithType = nonRootCategories.compactMap { cat -> CategoryWithType? in
             guard let typeInfo = determineType(for: cat, lookup: lookup) else {
                 return nil
             }
-            return CategoryWithType(category: cat, isExpense: typeInfo)
+            
+            // Build display path
+            let displayPath = buildCategoryPath(for: cat, lookup: lookup)
+            
+            return CategoryWithType(category: cat, isExpense: typeInfo, displayPath: displayPath)
         }
         
         // Filter by search text
         if searchText.isEmpty {
-            return categoriesWithType.sorted { $0.category.name < $1.category.name }
+            return categoriesWithType.sorted { $0.displayPath < $1.displayPath }
         } else {
             return categoriesWithType
-                .filter { $0.category.name.localizedCaseInsensitiveContains(searchText) }
-                .sorted { $0.category.name < $1.category.name }
+                .filter { $0.displayPath.localizedCaseInsensitiveContains(searchText) }
+                .sorted { $0.displayPath < $1.displayPath }
         }
+    }
+    
+    /// Build full category path like "Automobile : Gasoline"
+    private func buildCategoryPath(for category: MoneyCategory, lookup: [Int: MoneyCategory]) -> String {
+        var path: [String] = []
+        var current = category
+        var visited: Set<Int> = []
+        
+        // Add current category
+        path.append(current.name)
+        visited.insert(current.id)
+        
+        // Walk up the parent chain
+        while let parentId = current.parentId {
+            // Prevent infinite loops
+            guard !visited.contains(parentId) else { break }
+            visited.insert(parentId)
+            
+            guard let parent = lookup[parentId] else { break }
+            
+            // Skip root categories (INCOME, EXPENSE)
+            if parent.name == "INCOME" || parent.name == "EXPENSE" {
+                break
+            }
+            
+            // Add parent to front of path
+            path.insert(parent.name, at: 0)
+            current = parent
+        }
+        
+        return path.joined(separator: " : ")
     }
     
     /// Determine if category is expense (131) or income (130) by walking up parent chain
