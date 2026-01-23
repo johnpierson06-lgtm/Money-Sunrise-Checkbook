@@ -1,0 +1,231 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.healthmarketscience.jackcess;
+
+import com.healthmarketscience.jackcess.Column;
+import com.healthmarketscience.jackcess.ColumnBuilder;
+import com.healthmarketscience.jackcess.DataType;
+import com.healthmarketscience.jackcess.Database;
+import com.healthmarketscience.jackcess.ImportFilter;
+import com.healthmarketscience.jackcess.SimpleImportFilter;
+import com.healthmarketscience.jackcess.Table;
+import java.io.BufferedReader;
+import java.io.EOFException;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public class ImportUtil {
+    private static final Log LOG = LogFactory.getLog(ImportUtil.class);
+    private static final int COPY_TABLE_BATCH_SIZE = 200;
+    static final String LINE_SEPARATOR = System.getProperty("line.separator");
+
+    private ImportUtil() {
+    }
+
+    public static String importResultSet(ResultSet source, Database db, String name) throws SQLException, IOException {
+        return ImportUtil.importResultSet(source, db, name, SimpleImportFilter.INSTANCE);
+    }
+
+    public static String importResultSet(ResultSet source, Database db, String name, ImportFilter filter) throws SQLException, IOException {
+        return ImportUtil.importResultSet(source, db, name, filter, false);
+    }
+
+    public static String importResultSet(ResultSet source, Database db, String name, ImportFilter filter, boolean useExistingTable) throws SQLException, IOException {
+        ResultSetMetaData md = source.getMetaData();
+        name = Database.escapeIdentifier(name);
+        Table table = null;
+        if (!useExistingTable || (table = db.getTable(name)) == null) {
+            LinkedList<Column> columns = new LinkedList<Column>();
+            int i = 1;
+            while (i <= md.getColumnCount()) {
+                Column column = new Column();
+                column.setName(Database.escapeIdentifier(md.getColumnName(i)));
+                int lengthInUnits = md.getColumnDisplaySize(i);
+                column.setSQLType(md.getColumnType(i), lengthInUnits);
+                DataType type = column.getType();
+                if (type.isTrueVariableLength() && !type.isLongValue()) {
+                    column.setLengthInUnits((short)lengthInUnits);
+                }
+                if (type.getHasScalePrecision()) {
+                    int scale = md.getScale(i);
+                    int precision = md.getPrecision(i);
+                    if (type.isValidScale(scale)) {
+                        column.setScale((byte)scale);
+                    }
+                    if (type.isValidPrecision(precision)) {
+                        column.setPrecision((byte)precision);
+                    }
+                }
+                columns.add(column);
+                ++i;
+            }
+            table = ImportUtil.createUniqueTable(db, name, columns, md, filter);
+        }
+        ArrayList<Object[]> rows = new ArrayList<Object[]>(200);
+        int numColumns = md.getColumnCount();
+        while (source.next()) {
+            Object[] row = new Object[numColumns];
+            int i = 0;
+            while (i < row.length) {
+                row[i] = source.getObject(i + 1);
+                ++i;
+            }
+            rows.add(filter.filterRow(row));
+            if (rows.size() != 200) continue;
+            table.addRows(rows);
+            rows.clear();
+        }
+        if (rows.size() > 0) {
+            table.addRows(rows);
+        }
+        return table.getName();
+    }
+
+    public static String importFile(File f, Database db, String name, String delim) throws IOException {
+        return ImportUtil.importFile(f, db, name, delim, SimpleImportFilter.INSTANCE);
+    }
+
+    public static String importFile(File f, Database db, String name, String delim, ImportFilter filter) throws IOException {
+        return ImportUtil.importFile(f, db, name, delim, '\"', filter, false);
+    }
+
+    public static String importFile(File f, Database db, String name, String delim, char quote, ImportFilter filter, boolean useExistingTable) throws IOException {
+        BufferedReader in = null;
+        try {
+            in = new BufferedReader(new FileReader(f));
+            String string = ImportUtil.importReader(in, db, name, delim, quote, filter, useExistingTable);
+            return string;
+        }
+        finally {
+            if (in != null) {
+                try {
+                    in.close();
+                }
+                catch (IOException ex) {
+                    LOG.warn("Could not close file " + f.getAbsolutePath(), ex);
+                }
+            }
+        }
+    }
+
+    public static String importReader(BufferedReader in, Database db, String name, String delim) throws IOException {
+        return ImportUtil.importReader(in, db, name, delim, SimpleImportFilter.INSTANCE);
+    }
+
+    public static String importReader(BufferedReader in, Database db, String name, String delim, ImportFilter filter) throws IOException {
+        return ImportUtil.importReader(in, db, name, delim, filter, false);
+    }
+
+    public static String importReader(BufferedReader in, Database db, String name, String delim, ImportFilter filter, boolean useExistingTable) throws IOException {
+        return ImportUtil.importReader(in, db, name, delim, '\"', filter, useExistingTable);
+    }
+
+    public static String importReader(BufferedReader in, Database db, String name, String delim, char quote, ImportFilter filter, boolean useExistingTable) throws IOException {
+        String line = in.readLine();
+        if (line == null || line.trim().length() == 0) {
+            return null;
+        }
+        Pattern delimPat = Pattern.compile(delim);
+        try {
+            name = Database.escapeIdentifier(name);
+            Table table = null;
+            if (!useExistingTable || (table = db.getTable(name)) == null) {
+                LinkedList<Column> columns = new LinkedList<Column>();
+                String[] columnNames = ImportUtil.splitLine(line, delimPat, quote, in, 0);
+                int i = 0;
+                while (i < columnNames.length) {
+                    columns.add(new ColumnBuilder(columnNames[i], DataType.TEXT).escapeName().setLength((short)DataType.TEXT.getMaxSize()).toColumn());
+                    ++i;
+                }
+                table = ImportUtil.createUniqueTable(db, name, columns, null, filter);
+            }
+            ArrayList<Object[]> rows = new ArrayList<Object[]>(200);
+            int numColumns = table.getColumnCount();
+            while ((line = in.readLine()) != null) {
+                Object[] data = ImportUtil.splitLine(line, delimPat, quote, in, numColumns);
+                rows.add(filter.filterRow(data));
+                if (rows.size() != 200) continue;
+                table.addRows(rows);
+                rows.clear();
+            }
+            if (rows.size() > 0) {
+                table.addRows(rows);
+            }
+            return table.getName();
+        }
+        catch (SQLException e) {
+            throw (IOException)new IOException(e.getMessage()).initCause(e);
+        }
+    }
+
+    private static String[] splitLine(String line, Pattern delim, char quote, BufferedReader in, int numColumns) throws IOException {
+        ArrayList<String> tokens = new ArrayList<String>();
+        StringBuilder sb = new StringBuilder();
+        Matcher m = delim.matcher(line);
+        int idx = 0;
+        while (idx < line.length()) {
+            if (line.charAt(idx) == quote) {
+                int endIdx;
+                block6: {
+                    sb.setLength(0);
+                    ++idx;
+                    while (true) {
+                        if ((endIdx = line.indexOf(quote, idx)) >= 0) {
+                            sb.append(line, idx, endIdx);
+                            if (++endIdx < line.length() && line.charAt(endIdx) == quote) {
+                                sb.append(quote);
+                                idx = endIdx + 1;
+                                continue;
+                            }
+                            break block6;
+                        }
+                        sb.append(line, idx, line.length());
+                        sb.append(LINE_SEPARATOR);
+                        idx = 0;
+                        line = in.readLine();
+                        if (line == null) break;
+                    }
+                    throw new EOFException("Missing end of quoted value " + sb);
+                }
+                idx = endIdx;
+                tokens.add(sb.toString());
+                idx = m.find(idx) ? m.end() : line.length();
+                continue;
+            }
+            if (m.find(idx)) {
+                tokens.add(line.substring(idx, m.start()));
+                idx = m.end();
+                continue;
+            }
+            tokens.add(line.substring(idx));
+            idx = line.length();
+        }
+        return tokens.toArray(new String[Math.max(tokens.size(), numColumns)]);
+    }
+
+    private static Table createUniqueTable(Database db, String name, List<Column> columns, ResultSetMetaData md, ImportFilter filter) throws IOException, SQLException {
+        String baseName = name;
+        int counter = 2;
+        while (db.getTable(name) != null) {
+            name = String.valueOf(baseName) + counter++;
+        }
+        db.createTable(name, filter.filterColumns(columns, md));
+        return db.getTable(name);
+    }
+}
+

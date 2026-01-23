@@ -1,0 +1,1191 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.healthmarketscience.jackcess;
+
+import com.healthmarketscience.jackcess.CaseInsensitiveColumnMatcher;
+import com.healthmarketscience.jackcess.CodecProvider;
+import com.healthmarketscience.jackcess.Column;
+import com.healthmarketscience.jackcess.Cursor;
+import com.healthmarketscience.jackcess.CursorBuilder;
+import com.healthmarketscience.jackcess.DataType;
+import com.healthmarketscience.jackcess.DefaultCodecProvider;
+import com.healthmarketscience.jackcess.ErrorHandler;
+import com.healthmarketscience.jackcess.ImportFilter;
+import com.healthmarketscience.jackcess.ImportUtil;
+import com.healthmarketscience.jackcess.IndexBuilder;
+import com.healthmarketscience.jackcess.IndexCursor;
+import com.healthmarketscience.jackcess.IndexData;
+import com.healthmarketscience.jackcess.JetFormat;
+import com.healthmarketscience.jackcess.PageChannel;
+import com.healthmarketscience.jackcess.PropertyMap;
+import com.healthmarketscience.jackcess.PropertyMaps;
+import com.healthmarketscience.jackcess.Relationship;
+import com.healthmarketscience.jackcess.Table;
+import com.healthmarketscience.jackcess.query.Query;
+import java.io.BufferedReader;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.Flushable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.charset.Charset;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeSet;
+import org.apache.commons.lang.builder.ToStringBuilder;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public class Database
+implements Iterable<Table>,
+Closeable,
+Flushable {
+    private static final Log LOG = LogFactory.getLog(Database.class);
+    private static final byte[] SYS_DEFAULT_SID = new byte[2];
+    public static final boolean DEFAULT_AUTO_SYNC = true;
+    public static final String DEFAULT_RESOURCE_PATH = "com/healthmarketscience/jackcess/";
+    public static final Table.ColumnOrder DEFAULT_COLUMN_ORDER;
+    public static final String USE_BIG_INDEX_PROPERTY = "com.healthmarketscience.jackcess.bigIndex";
+    public static final String TIMEZONE_PROPERTY = "com.healthmarketscience.jackcess.timeZone";
+    public static final String CHARSET_PROPERTY_PREFIX = "com.healthmarketscience.jackcess.charset.";
+    public static final String RESOURCE_PATH_PROPERTY = "com.healthmarketscience.jackcess.resourcePath";
+    public static final String BROKEN_NIO_PROPERTY = "com.healthmarketscience.jackcess.brokenNio";
+    public static final String COLUMN_ORDER_PROPERTY = "com.healthmarketscience.jackcess.columnOrder";
+    public static final ErrorHandler DEFAULT_ERROR_HANDLER;
+    static final String RESOURCE_PATH;
+    static final boolean BROKEN_NIO;
+    private static final int PAGE_SYSTEM_CATALOG = 2;
+    private static final String TABLE_SYSTEM_CATALOG = "MSysObjects";
+    private static final Integer SYS_FULL_ACCESS_ACM;
+    private static final String ACE_COL_ACM = "ACM";
+    private static final String ACE_COL_F_INHERITABLE = "FInheritable";
+    private static final String ACE_COL_OBJECT_ID = "ObjectId";
+    private static final String ACE_COL_SID = "SID";
+    private static final String REL_COL_COLUMN_COUNT = "ccolumn";
+    private static final String REL_COL_FLAGS = "grbit";
+    private static final String REL_COL_COLUMN_INDEX = "icolumn";
+    private static final String REL_COL_TO_COLUMN = "szColumn";
+    private static final String REL_COL_TO_TABLE = "szObject";
+    private static final String REL_COL_FROM_COLUMN = "szReferencedColumn";
+    private static final String REL_COL_FROM_TABLE = "szReferencedObject";
+    private static final String REL_COL_NAME = "szRelationship";
+    private static final String CAT_COL_ID = "Id";
+    private static final String CAT_COL_NAME = "Name";
+    private static final String CAT_COL_OWNER = "Owner";
+    private static final String CAT_COL_PARENT_ID = "ParentId";
+    private static final String CAT_COL_TYPE = "Type";
+    private static final String CAT_COL_DATE_CREATE = "DateCreate";
+    private static final String CAT_COL_DATE_UPDATE = "DateUpdate";
+    private static final String CAT_COL_FLAGS = "Flags";
+    private static final String CAT_COL_PROPS = "LvProp";
+    private static final int DB_PARENT_ID = 0xF000000;
+    private static final long MAX_EMPTYDB_SIZE = 350000L;
+    static final int SYSTEM_OBJECT_FLAG = Integer.MIN_VALUE;
+    static final int ALT_SYSTEM_OBJECT_FLAG = 2;
+    static final int HIDDEN_OBJECT_FLAG = 8;
+    static final int SYSTEM_OBJECT_FLAGS = -2147483646;
+    private static final String ESCAPE_PREFIX = "x";
+    private static final String SYSTEM_OBJECT_NAME_TABLES = "Tables";
+    private static final String SYSTEM_OBJECT_NAME_DATABASES = "Databases";
+    private static final String SYSTEM_OBJECT_NAME_RELATIONSHIPS = "Relationships";
+    private static final String TABLE_SYSTEM_ACES = "MSysACEs";
+    private static final String TABLE_SYSTEM_RELATIONSHIPS = "MSysRelationships";
+    private static final String TABLE_SYSTEM_QUERIES = "MSysQueries";
+    private static final String OBJECT_NAME_DB_PROPS = "MSysDb";
+    private static final String OBJECT_NAME_SUMMARY_PROPS = "SummaryInfo";
+    private static final String OBJECT_NAME_USERDEF_PROPS = "UserDefined";
+    private static final Short TYPE_TABLE;
+    private static final Short TYPE_QUERY;
+    private static final int MAX_CACHED_LOOKUP_TABLES = 50;
+    private static Collection<String> SYSTEM_CATALOG_COLUMNS;
+    private static Collection<String> SYSTEM_CATALOG_TABLE_NAME_COLUMNS;
+    private static Collection<String> SYSTEM_CATALOG_PROPS_COLUMNS;
+    private static final Set<String> RESERVED_WORDS;
+    private ByteBuffer _buffer;
+    private Integer _tableParentId;
+    private final JetFormat _format;
+    private final Map<String, TableInfo> _tableLookup = new LinkedHashMap<String, TableInfo>(){
+        private static final long serialVersionUID = 0L;
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, TableInfo> e) {
+            return this.size() > 50;
+        }
+    };
+    private Set<String> _tableNames;
+    private final PageChannel _pageChannel;
+    private Table _systemCatalog;
+    private TableFinder _tableFinder;
+    private Table _accessControlEntries;
+    private Table _relationships;
+    private Table _queries;
+    private final List<byte[]> _newTableSIDs = new ArrayList<byte[]>();
+    private Boolean _useBigIndex;
+    private ErrorHandler _dbErrorHandler;
+    private FileFormat _fileFormat;
+    private Charset _charset;
+    private TimeZone _timeZone;
+    private Column.SortOrder _defaultSortOrder;
+    private Short _defaultCodePage;
+    private Table.ColumnOrder _columnOrder;
+    private final TableCache _tableCache = new TableCache();
+    private PropertyMaps.Handler _propsHandler;
+    private Integer _dbParentId;
+    private PropertyMaps _dbPropMaps;
+    private PropertyMaps _summaryPropMaps;
+    private PropertyMaps _userDefPropMaps;
+
+    static {
+        Database.SYS_DEFAULT_SID[0] = -90;
+        Database.SYS_DEFAULT_SID[1] = 51;
+        DEFAULT_COLUMN_ORDER = Table.ColumnOrder.DATA;
+        DEFAULT_ERROR_HANDLER = new ErrorHandler(){
+
+            public Object handleRowError(Column column, byte[] columnData, Table.RowState rowState, Exception error) throws IOException {
+                if (error instanceof IOException) {
+                    throw (IOException)error;
+                }
+                throw (RuntimeException)error;
+            }
+        };
+        RESOURCE_PATH = System.getProperty(RESOURCE_PATH_PROPERTY, DEFAULT_RESOURCE_PATH);
+        BROKEN_NIO = Boolean.TRUE.toString().equalsIgnoreCase(System.getProperty(BROKEN_NIO_PROPERTY));
+        SYS_FULL_ACCESS_ACM = 1048575;
+        TYPE_TABLE = 1;
+        TYPE_QUERY = 5;
+        SYSTEM_CATALOG_COLUMNS = new HashSet<String>(Arrays.asList(CAT_COL_NAME, CAT_COL_TYPE, CAT_COL_ID, CAT_COL_FLAGS));
+        SYSTEM_CATALOG_TABLE_NAME_COLUMNS = new HashSet<String>(Arrays.asList(CAT_COL_NAME, CAT_COL_TYPE, CAT_COL_ID, CAT_COL_FLAGS, CAT_COL_PARENT_ID));
+        SYSTEM_CATALOG_PROPS_COLUMNS = new HashSet<String>(Arrays.asList(CAT_COL_ID, CAT_COL_PROPS));
+        RESERVED_WORDS = new HashSet<String>();
+        RESERVED_WORDS.addAll(Arrays.asList("add", "all", "alphanumeric", "alter", "and", "any", "application", "as", "asc", "assistant", "autoincrement", "avg", "between", "binary", "bit", "boolean", "by", "byte", "char", "character", "column", "compactdatabase", "constraint", "container", "count", "counter", "create", "createdatabase", "createfield", "creategroup", "createindex", "createobject", "createproperty", "createrelation", "createtabledef", "createuser", "createworkspace", "currency", "currentuser", "database", "date", "datetime", "delete", "desc", "description", "disallow", "distinct", "distinctrow", "document", "double", "drop", "echo", "else", "end", "eqv", "error", "exists", "exit", "false", "field", "fields", "fillcache", "float", "float4", "float8", "foreign", "form", "forms", "from", "full", "function", "general", "getobject", "getoption", "gotopage", "group", "group by", "guid", "having", "idle", "ieeedouble", "ieeesingle", "if", "ignore", "imp", "in", "index", "indexes", "inner", "insert", "inserttext", "int", "integer", "integer1", "integer2", "integer4", "into", "is", "join", "key", "lastmodified", "left", "level", "like", "logical", "logical1", "long", "longbinary", "longtext", "macro", "match", "max", "min", "mod", "memo", "module", "money", "move", "name", "newpassword", "no", "not", "null", "number", "numeric", "object", "oleobject", "off", "on", "openrecordset", "option", "or", "order", "outer", "owneraccess", "parameter", "parameters", "partial", "percent", "pivot", "primary", "procedure", "property", "queries", "query", "quit", "real", "recalc", "recordset", "references", "refresh", "refreshlink", "registerdatabase", "relation", "repaint", "repairdatabase", "report", "reports", "requery", "right", "screen", "section", "select", "set", "setfocus", "setoption", "short", "single", "smallint", "some", "sql", "stdev", "stdevp", "string", "sum", "table", "tabledef", "tabledefs", "tableid", "text", "time", "timestamp", "top", "transform", "true", "type", "union", "unique", "update", "user", "value", "values", "var", "varp", "varbinary", "varchar", "where", "with", "workspace", "xor", "year", "yes", "yesno"));
+    }
+
+    public static Database open(File mdbFile) throws IOException {
+        return Database.open(mdbFile, false);
+    }
+
+    public static Database open(File mdbFile, boolean readOnly) throws IOException {
+        return Database.open(mdbFile, readOnly, true);
+    }
+
+    public static Database open(File mdbFile, boolean readOnly, boolean autoSync) throws IOException {
+        return Database.open(mdbFile, readOnly, autoSync, null, null);
+    }
+
+    public static Database open(File mdbFile, boolean readOnly, boolean autoSync, Charset charset, TimeZone timeZone) throws IOException {
+        return Database.open(mdbFile, readOnly, autoSync, charset, timeZone, null);
+    }
+
+    public static Database open(File mdbFile, boolean readOnly, boolean autoSync, Charset charset, TimeZone timeZone, CodecProvider provider) throws IOException {
+        if (!mdbFile.exists() || !mdbFile.canRead()) {
+            throw new FileNotFoundException("given file does not exist: " + mdbFile);
+        }
+        FileChannel channel = Database.openChannel(mdbFile, readOnly |= !mdbFile.canWrite());
+        if (!readOnly) {
+            JetFormat jetFormat = JetFormat.getFormat(channel);
+            if (jetFormat.READ_ONLY) {
+                try {
+                    channel.close();
+                }
+                catch (Exception exception) {
+                    // empty catch block
+                }
+                throw new IOException("jet format '" + jetFormat + "' does not support writing");
+            }
+        }
+        return new Database(channel, autoSync, null, charset, timeZone, provider);
+    }
+
+    public static Database create(File mdbFile) throws IOException {
+        return Database.create(mdbFile, true);
+    }
+
+    public static Database create(FileFormat fileFormat, File mdbFile) throws IOException {
+        return Database.create(fileFormat, mdbFile, true);
+    }
+
+    public static Database create(File mdbFile, boolean autoSync) throws IOException {
+        return Database.create(FileFormat.V2000, mdbFile, autoSync);
+    }
+
+    public static Database create(FileFormat fileFormat, File mdbFile, boolean autoSync) throws IOException {
+        return Database.create(fileFormat, mdbFile, autoSync, null, null);
+    }
+
+    public static Database create(FileFormat fileFormat, File mdbFile, boolean autoSync, Charset charset, TimeZone timeZone) throws IOException {
+        if (fileFormat.getJetFormat().READ_ONLY) {
+            throw new IOException("jet format '" + fileFormat.getJetFormat() + "' does not support writing");
+        }
+        FileChannel channel = Database.openChannel(mdbFile, false);
+        channel.truncate(0L);
+        Database.transferFrom(channel, Database.getResourceAsStream(fileFormat._emptyFile));
+        return new Database(channel, autoSync, fileFormat, charset, timeZone, null);
+    }
+
+    static FileChannel openChannel(File mdbFile, boolean readOnly) throws FileNotFoundException {
+        String mode = readOnly ? "r" : "rw";
+        return new RandomAccessFile(mdbFile, mode).getChannel();
+    }
+
+    protected Database(FileChannel channel, boolean autoSync, FileFormat fileFormat, Charset charset, TimeZone timeZone, CodecProvider provider) throws IOException {
+        boolean success = false;
+        try {
+            this._format = JetFormat.getFormat(channel);
+            this._charset = charset == null ? Database.getDefaultCharset(this._format) : charset;
+            this._columnOrder = Database.getDefaultColumnOrder();
+            this._fileFormat = fileFormat;
+            this._pageChannel = new PageChannel(channel, this._format, autoSync);
+            TimeZone timeZone2 = this._timeZone = timeZone == null ? Database.getDefaultTimeZone() : timeZone;
+            if (provider == null) {
+                provider = DefaultCodecProvider.INSTANCE;
+            }
+            this._pageChannel.initialize(this, provider);
+            this._buffer = this._pageChannel.createPageBuffer();
+            this.readSystemCatalog();
+            success = true;
+        }
+        finally {
+            if (!success && channel != null) {
+                try {
+                    channel.close();
+                }
+                catch (Exception exception) {}
+            }
+        }
+    }
+
+    public PageChannel getPageChannel() {
+        return this._pageChannel;
+    }
+
+    public JetFormat getFormat() {
+        return this._format;
+    }
+
+    public Table getSystemCatalog() {
+        return this._systemCatalog;
+    }
+
+    public Table getAccessControlEntries() {
+        return this._accessControlEntries;
+    }
+
+    public boolean doUseBigIndex() {
+        return this._useBigIndex != null ? this._useBigIndex : true;
+    }
+
+    public void setUseBigIndex(boolean useBigIndex) {
+        this._useBigIndex = useBigIndex;
+    }
+
+    public ErrorHandler getErrorHandler() {
+        return this._dbErrorHandler != null ? this._dbErrorHandler : DEFAULT_ERROR_HANDLER;
+    }
+
+    public void setErrorHandler(ErrorHandler newErrorHandler) {
+        this._dbErrorHandler = newErrorHandler;
+    }
+
+    public TimeZone getTimeZone() {
+        return this._timeZone;
+    }
+
+    public void setTimeZone(TimeZone newTimeZone) {
+        if (newTimeZone == null) {
+            newTimeZone = Database.getDefaultTimeZone();
+        }
+        this._timeZone = newTimeZone;
+    }
+
+    public Charset getCharset() {
+        return this._charset;
+    }
+
+    public void setCharset(Charset newCharset) {
+        if (newCharset == null) {
+            newCharset = Database.getDefaultCharset(this.getFormat());
+        }
+        this._charset = newCharset;
+    }
+
+    public Table.ColumnOrder getColumnOrder() {
+        return this._columnOrder;
+    }
+
+    public void setColumnOrder(Table.ColumnOrder newColumnOrder) {
+        if (newColumnOrder == null) {
+            newColumnOrder = Database.getDefaultColumnOrder();
+        }
+        this._columnOrder = newColumnOrder;
+    }
+
+    private PropertyMaps.Handler getPropsHandler() {
+        if (this._propsHandler == null) {
+            this._propsHandler = new PropertyMaps.Handler(this);
+        }
+        return this._propsHandler;
+    }
+
+    public FileFormat getFileFormat() throws IOException {
+        if (this._fileFormat == null) {
+            Map<String, FileFormat> possibleFileFormats = this.getFormat().getPossibleFileFormats();
+            if (possibleFileFormats.size() == 1) {
+                this._fileFormat = possibleFileFormats.get(null);
+            } else {
+                String accessVersion = (String)this.getDatabaseProperties().getValue("AccessVersion");
+                this._fileFormat = possibleFileFormats.get(accessVersion);
+                if (this._fileFormat == null) {
+                    throw new IllegalStateException("Could not determine FileFormat");
+                }
+            }
+        }
+        return this._fileFormat;
+    }
+
+    public Column.SortOrder getDefaultSortOrder() throws IOException {
+        if (this._defaultSortOrder == null) {
+            this.initRootPageInfo();
+        }
+        return this._defaultSortOrder;
+    }
+
+    public short getDefaultCodePage() throws IOException {
+        if (this._defaultCodePage == null) {
+            this.initRootPageInfo();
+        }
+        return this._defaultCodePage;
+    }
+
+    private void initRootPageInfo() throws IOException {
+        this._pageChannel.readPage(this._buffer, 0);
+        this._defaultSortOrder = Column.readSortOrder(this._buffer, this._format.OFFSET_SORT_ORDER, this._format);
+        this._defaultCodePage = this._buffer.getShort(this._format.OFFSET_CODE_PAGE);
+    }
+
+    public PropertyMaps readProperties(byte[] propsBytes, int objectId) throws IOException {
+        return this.getPropsHandler().read(propsBytes, objectId);
+    }
+
+    private void readSystemCatalog() throws IOException {
+        this._systemCatalog = this.readTable(TABLE_SYSTEM_CATALOG, 2, -2147483646, this.defaultUseBigIndex());
+        try {
+            this._tableFinder = new DefaultTableFinder(new CursorBuilder(this._systemCatalog).setIndexByColumnNames(CAT_COL_PARENT_ID, CAT_COL_NAME).setColumnMatcher(CaseInsensitiveColumnMatcher.INSTANCE).toIndexCursor());
+        }
+        catch (IllegalArgumentException e) {
+            LOG.info("Could not find expected index on table " + this._systemCatalog.getName());
+            this._tableFinder = new FallbackTableFinder(new CursorBuilder(this._systemCatalog).setColumnMatcher(CaseInsensitiveColumnMatcher.INSTANCE).toCursor());
+        }
+        this._tableParentId = this._tableFinder.findObjectId(0xF000000, SYSTEM_OBJECT_NAME_TABLES);
+        if (this._tableParentId == null) {
+            throw new IOException("Did not find required parent table id");
+        }
+        this._accessControlEntries = this.getSystemTable(TABLE_SYSTEM_ACES);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Finished reading system catalog.  Tables: " + this.getTableNames());
+        }
+    }
+
+    public Set<String> getTableNames() throws IOException {
+        if (this._tableNames == null) {
+            TreeSet<String> tableNames = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
+            this._tableFinder.getTableNames(tableNames);
+            this._tableNames = tableNames;
+        }
+        return this._tableNames;
+    }
+
+    @Override
+    public Iterator<Table> iterator() {
+        return new TableIterator();
+    }
+
+    public Table getTable(String name) throws IOException {
+        return this.getTable(name, this.defaultUseBigIndex());
+    }
+
+    public Table getTable(String name, boolean useBigIndex) throws IOException {
+        return this.getTable(name, false, useBigIndex);
+    }
+
+    protected Table getTable(int tableDefPageNumber) throws IOException {
+        Table table = this._tableCache.get(tableDefPageNumber);
+        if (table != null) {
+            return table;
+        }
+        Map<String, Object> objectRow = this._tableFinder.getObjectRow(tableDefPageNumber, SYSTEM_CATALOG_COLUMNS);
+        if (objectRow == null) {
+            return null;
+        }
+        String name = (String)objectRow.get(CAT_COL_NAME);
+        int flags = (Integer)objectRow.get(CAT_COL_FLAGS);
+        return this.readTable(name, tableDefPageNumber, flags, this.defaultUseBigIndex());
+    }
+
+    private Table getTable(String name, boolean includeSystemTables, boolean useBigIndex) throws IOException {
+        TableInfo tableInfo = this.lookupTable(name);
+        if (tableInfo == null || tableInfo.pageNumber == null) {
+            return null;
+        }
+        if (!includeSystemTables && Database.isSystemObject(tableInfo.flags)) {
+            return null;
+        }
+        return this.readTable(tableInfo.tableName, tableInfo.pageNumber, tableInfo.flags, useBigIndex);
+    }
+
+    public void createTable(String name, List<Column> columns) throws IOException {
+        this.createTable(name, columns, null);
+    }
+
+    public void createTable(String name, List<Column> columns, List<IndexBuilder> indexes) throws IOException {
+        Database.validateIdentifierName(name, this._format.MAX_TABLE_NAME_LENGTH, "table");
+        if (this.getTable(name) != null) {
+            throw new IllegalArgumentException("Cannot create table with name of existing table");
+        }
+        if (columns.isEmpty()) {
+            throw new IllegalArgumentException("Cannot create table with no columns");
+        }
+        if (columns.size() > this._format.MAX_COLUMNS_PER_TABLE) {
+            throw new IllegalArgumentException("Cannot create table with more than " + this._format.MAX_COLUMNS_PER_TABLE + " columns");
+        }
+        Column.SortOrder dbSortOrder = null;
+        try {
+            dbSortOrder = this.getDefaultSortOrder();
+        }
+        catch (IOException iOException) {
+            // empty catch block
+        }
+        HashSet<String> colNames = new HashSet<String>();
+        for (Column column : columns) {
+            column.validate(this._format);
+            if (!colNames.add(column.getName().toUpperCase())) {
+                throw new IllegalArgumentException("duplicate column name: " + column.getName());
+            }
+            if (!column.getType().isTextual() || column.getTextSortOrder() != null) continue;
+            column.setTextSortOrder(dbSortOrder);
+        }
+        List<Column> autoCols = Table.getAutoNumberColumns(columns);
+        if (autoCols.size() > 1) {
+            EnumSet<DataType> autoTypes = EnumSet.noneOf(DataType.class);
+            for (Column c : autoCols) {
+                if (autoTypes.add(c.getType())) continue;
+                throw new IllegalArgumentException("Can have at most one AutoNumber column of type " + (Object)((Object)c.getType()) + " per table");
+            }
+        }
+        if (indexes == null) {
+            indexes = Collections.emptyList();
+        }
+        if (!indexes.isEmpty()) {
+            HashSet<String> idxNames = new HashSet<String>();
+            boolean foundPk = false;
+            for (IndexBuilder index : indexes) {
+                index.validate(colNames);
+                if (!idxNames.add(index.getName().toUpperCase())) {
+                    throw new IllegalArgumentException("duplicate index name: " + index.getName());
+                }
+                if (!index.isPrimaryKey()) continue;
+                if (foundPk) {
+                    throw new IllegalArgumentException("found second primary key index: " + index.getName());
+                }
+                foundPk = true;
+            }
+        }
+        int tdefPageNumber = Table.writeTableDefinition(columns, indexes, this._pageChannel, this._format, this.getCharset());
+        this.addTable(name, tdefPageNumber);
+        this.addToSystemCatalog(name, tdefPageNumber);
+        this.addToAccessControlEntries(tdefPageNumber);
+    }
+
+    public List<Relationship> getRelationships(Table table1, Table table2) throws IOException {
+        int nameCmp;
+        if (this._relationships == null) {
+            this._relationships = this.getSystemTable(TABLE_SYSTEM_RELATIONSHIPS);
+            if (this._relationships == null) {
+                throw new IOException("Could not find system relationships table");
+            }
+        }
+        if ((nameCmp = table1.getName().compareTo(table2.getName())) == 0) {
+            throw new IllegalArgumentException("Must provide two different tables");
+        }
+        if (nameCmp > 0) {
+            Table tmp = table1;
+            table1 = table2;
+            table2 = tmp;
+        }
+        ArrayList<Relationship> relationships = new ArrayList<Relationship>();
+        Cursor cursor = Database.createCursorWithOptionalIndex(this._relationships, REL_COL_FROM_TABLE, table1.getName());
+        this.collectRelationships(cursor, table1, table2, relationships);
+        cursor = Database.createCursorWithOptionalIndex(this._relationships, REL_COL_TO_TABLE, table1.getName());
+        this.collectRelationships(cursor, table2, table1, relationships);
+        return relationships;
+    }
+
+    public List<Query> getQueries() throws IOException {
+        if (this._queries == null) {
+            this._queries = this.getSystemTable(TABLE_SYSTEM_QUERIES);
+            if (this._queries == null) {
+                throw new IOException("Could not find system queries table");
+            }
+        }
+        ArrayList<Map<String, Object>> queryInfo = new ArrayList<Map<String, Object>>();
+        HashMap queryRowMap = new HashMap();
+        for (Map<String, Object> row : Cursor.createCursor(this._systemCatalog).iterable(SYSTEM_CATALOG_COLUMNS)) {
+            String name = (String)row.get(CAT_COL_NAME);
+            if (name == null || !TYPE_QUERY.equals(row.get(CAT_COL_TYPE))) continue;
+            queryInfo.add(row);
+            Integer id = (Integer)row.get(CAT_COL_ID);
+            queryRowMap.put(id, new ArrayList());
+        }
+        for (Map<String, Object> row : Cursor.createCursor(this._queries)) {
+            Query.Row queryRow = new Query.Row(row);
+            List queryRows = (List)queryRowMap.get(queryRow.objectId);
+            if (queryRows == null) {
+                LOG.warn("Found rows for query with id " + queryRow.objectId + " missing from system catalog");
+                continue;
+            }
+            queryRows.add(queryRow);
+        }
+        ArrayList<Query> queries = new ArrayList<Query>();
+        for (Map map : queryInfo) {
+            String name = (String)map.get(CAT_COL_NAME);
+            Integer id = (Integer)map.get(CAT_COL_ID);
+            int flags = (Integer)map.get(CAT_COL_FLAGS);
+            List queryRows = (List)queryRowMap.get(id);
+            queries.add(Query.create(flags, name, queryRows, id));
+        }
+        return queries;
+    }
+
+    public Table getSystemTable(String tableName) throws IOException {
+        return this.getTable(tableName, true, this.defaultUseBigIndex());
+    }
+
+    public PropertyMap getDatabaseProperties() throws IOException {
+        if (this._dbPropMaps == null) {
+            this._dbPropMaps = this.getPropertiesForDbObject(OBJECT_NAME_DB_PROPS);
+        }
+        return this._dbPropMaps.getDefault();
+    }
+
+    public PropertyMap getSummaryProperties() throws IOException {
+        if (this._summaryPropMaps == null) {
+            this._summaryPropMaps = this.getPropertiesForDbObject(OBJECT_NAME_SUMMARY_PROPS);
+        }
+        return this._summaryPropMaps.getDefault();
+    }
+
+    public PropertyMap getUserDefinedProperties() throws IOException {
+        if (this._userDefPropMaps == null) {
+            this._userDefPropMaps = this.getPropertiesForDbObject(OBJECT_NAME_USERDEF_PROPS);
+        }
+        return this._userDefPropMaps.getDefault();
+    }
+
+    public PropertyMaps getPropertiesForObject(int objectId) throws IOException {
+        Map<String, Object> objectRow = this._tableFinder.getObjectRow(objectId, SYSTEM_CATALOG_PROPS_COLUMNS);
+        byte[] propsBytes = null;
+        if (objectRow != null) {
+            propsBytes = (byte[])objectRow.get(CAT_COL_PROPS);
+        }
+        return this.readProperties(propsBytes, objectId);
+    }
+
+    private PropertyMaps getPropertiesForDbObject(String dbName) throws IOException {
+        if (this._dbParentId == null) {
+            this._dbParentId = this._tableFinder.findObjectId(0xF000000, SYSTEM_OBJECT_NAME_DATABASES);
+            if (this._dbParentId == null) {
+                throw new IOException("Did not find required parent db id");
+            }
+        }
+        Map<String, Object> objectRow = this._tableFinder.getObjectRow(this._dbParentId, dbName, SYSTEM_CATALOG_PROPS_COLUMNS);
+        byte[] propsBytes = null;
+        int objectId = -1;
+        if (objectRow != null) {
+            propsBytes = (byte[])objectRow.get(CAT_COL_PROPS);
+            objectId = (Integer)objectRow.get(CAT_COL_ID);
+        }
+        return this.readProperties(propsBytes, objectId);
+    }
+
+    public String getDatabasePassword() throws IOException {
+        this._pageChannel.readPage(this._buffer, 0);
+        byte[] pwdBytes = new byte[this._format.SIZE_PASSWORD];
+        this._buffer.position(this._format.OFFSET_PASSWORD);
+        this._buffer.get(pwdBytes);
+        byte[] pwdMask = Database.getPasswordMask(this._buffer, this._format);
+        if (pwdMask != null) {
+            int i = 0;
+            while (i < pwdBytes.length) {
+                int n = i;
+                pwdBytes[n] = (byte)(pwdBytes[n] ^ pwdMask[i % pwdMask.length]);
+                ++i;
+            }
+        }
+        boolean hasPassword = false;
+        int i = 0;
+        while (i < pwdBytes.length) {
+            if (pwdBytes[i] != 0) {
+                hasPassword = true;
+                break;
+            }
+            ++i;
+        }
+        if (!hasPassword) {
+            return null;
+        }
+        String pwd = Column.decodeUncompressedText(pwdBytes, this.getCharset());
+        int idx = pwd.indexOf(0);
+        if (idx >= 0) {
+            pwd = pwd.substring(0, idx);
+        }
+        return pwd;
+    }
+
+    private void collectRelationships(Cursor cursor, Table fromTable, Table toTable, List<Relationship> relationships) {
+        for (Map<String, Object> row : cursor) {
+            String fromName = (String)row.get(REL_COL_FROM_TABLE);
+            String toName = (String)row.get(REL_COL_TO_TABLE);
+            if (!fromTable.getName().equalsIgnoreCase(fromName) || !toTable.getName().equalsIgnoreCase(toName)) continue;
+            String relName = (String)row.get(REL_COL_NAME);
+            Relationship rel = null;
+            for (Relationship tmp : relationships) {
+                if (!tmp.getName().equalsIgnoreCase(relName)) continue;
+                rel = tmp;
+                break;
+            }
+            if (rel == null) {
+                int numCols = (Integer)row.get(REL_COL_COLUMN_COUNT);
+                int flags = (Integer)row.get(REL_COL_FLAGS);
+                rel = new Relationship(relName, fromTable, toTable, flags, numCols);
+                relationships.add(rel);
+            }
+            int colIdx = (Integer)row.get(REL_COL_COLUMN_INDEX);
+            Column fromCol = fromTable.getColumn((String)row.get(REL_COL_FROM_COLUMN));
+            Column toCol = toTable.getColumn((String)row.get(REL_COL_TO_COLUMN));
+            rel.getFromColumns().set(colIdx, fromCol);
+            rel.getToColumns().set(colIdx, toCol);
+        }
+    }
+
+    private void addToSystemCatalog(String name, int pageNumber) throws IOException {
+        Object[] catalogRow = new Object[this._systemCatalog.getColumnCount()];
+        int idx = 0;
+        Date creationTime = new Date();
+        for (Column col : this._systemCatalog.getColumns()) {
+            if (CAT_COL_ID.equals(col.getName())) {
+                catalogRow[idx] = pageNumber;
+            } else if (CAT_COL_NAME.equals(col.getName())) {
+                catalogRow[idx] = name;
+            } else if (CAT_COL_TYPE.equals(col.getName())) {
+                catalogRow[idx] = TYPE_TABLE;
+            } else if (CAT_COL_DATE_CREATE.equals(col.getName()) || CAT_COL_DATE_UPDATE.equals(col.getName())) {
+                catalogRow[idx] = creationTime;
+            } else if (CAT_COL_PARENT_ID.equals(col.getName())) {
+                catalogRow[idx] = this._tableParentId;
+            } else if (CAT_COL_FLAGS.equals(col.getName())) {
+                catalogRow[idx] = 0;
+            } else if (CAT_COL_OWNER.equals(col.getName())) {
+                byte[] owner = new byte[2];
+                catalogRow[idx] = owner;
+                owner[0] = -49;
+                owner[1] = 95;
+            }
+            ++idx;
+        }
+        this._systemCatalog.addRow(catalogRow);
+    }
+
+    private void addToAccessControlEntries(int pageNumber) throws IOException {
+        if (this._newTableSIDs.isEmpty()) {
+            this.initNewTableSIDs();
+        }
+        Column acmCol = this._accessControlEntries.getColumn(ACE_COL_ACM);
+        Column inheritCol = this._accessControlEntries.getColumn(ACE_COL_F_INHERITABLE);
+        Column objIdCol = this._accessControlEntries.getColumn(ACE_COL_OBJECT_ID);
+        Column sidCol = this._accessControlEntries.getColumn(ACE_COL_SID);
+        ArrayList<Object[]> aceRows = new ArrayList<Object[]>(this._newTableSIDs.size());
+        for (byte[] sid : this._newTableSIDs) {
+            Object[] aceRow = new Object[this._accessControlEntries.getColumnCount()];
+            aceRow[acmCol.getColumnIndex()] = SYS_FULL_ACCESS_ACM;
+            aceRow[inheritCol.getColumnIndex()] = Boolean.FALSE;
+            aceRow[objIdCol.getColumnIndex()] = pageNumber;
+            aceRow[sidCol.getColumnIndex()] = sid;
+            aceRows.add(aceRow);
+        }
+        this._accessControlEntries.addRows(aceRows);
+    }
+
+    private void initNewTableSIDs() throws IOException {
+        Cursor cursor = Database.createCursorWithOptionalIndex(this._accessControlEntries, ACE_COL_OBJECT_ID, this._tableParentId);
+        for (Map<String, Object> row : cursor) {
+            Integer objId = (Integer)row.get(ACE_COL_OBJECT_ID);
+            if (!this._tableParentId.equals(objId)) continue;
+            this._newTableSIDs.add((byte[])row.get(ACE_COL_SID));
+        }
+        if (this._newTableSIDs.isEmpty()) {
+            this._newTableSIDs.add(SYS_DEFAULT_SID);
+        }
+    }
+
+    private Table readTable(String name, int pageNumber, int flags, boolean useBigIndex) throws IOException {
+        Table table = this._tableCache.get(pageNumber);
+        if (table != null) {
+            return table;
+        }
+        this._pageChannel.readPage(this._buffer, pageNumber);
+        byte pageType = this._buffer.get(0);
+        if (pageType != 2) {
+            throw new IOException("Looking for " + name + " at page " + pageNumber + ", but page type is " + pageType);
+        }
+        return this._tableCache.put(new Table(this, this._buffer, pageNumber, name, flags, useBigIndex));
+    }
+
+    private static Cursor createCursorWithOptionalIndex(Table table, String colName, Object colValue) throws IOException {
+        try {
+            return new CursorBuilder(table).setIndexByColumns(table.getColumn(colName)).setSpecificEntry(colValue).toCursor();
+        }
+        catch (IllegalArgumentException e) {
+            LOG.info("Could not find expected index on table " + table.getName());
+            return Cursor.createCursor(table);
+        }
+    }
+
+    public String copyTable(String name, ResultSet source) throws SQLException, IOException {
+        return ImportUtil.importResultSet(source, this, name);
+    }
+
+    public String copyTable(String name, ResultSet source, ImportFilter filter) throws SQLException, IOException {
+        return ImportUtil.importResultSet(source, this, name, filter);
+    }
+
+    public String importFile(String name, File f, String delim) throws IOException {
+        return ImportUtil.importFile(f, this, name, delim);
+    }
+
+    public String importFile(String name, File f, String delim, ImportFilter filter) throws IOException {
+        return ImportUtil.importFile(f, this, name, delim, filter);
+    }
+
+    public String importReader(String name, BufferedReader in, String delim) throws IOException {
+        return ImportUtil.importReader(in, this, name, delim);
+    }
+
+    public String importReader(String name, BufferedReader in, String delim, ImportFilter filter) throws IOException {
+        return ImportUtil.importReader(in, this, name, delim, filter);
+    }
+
+    @Override
+    public void flush() throws IOException {
+        this._pageChannel.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+        this._pageChannel.close();
+    }
+
+    public static String escapeIdentifier(String s) {
+        if (Database.isReservedWord(s)) {
+            return ESCAPE_PREFIX + s;
+        }
+        return s;
+    }
+
+    public static boolean isReservedWord(String s) {
+        return RESERVED_WORDS.contains(s.toLowerCase());
+    }
+
+    public static void validateIdentifierName(String name, int maxLength, String identifierType) {
+        if (name == null || name.trim().length() == 0) {
+            throw new IllegalArgumentException(String.valueOf(identifierType) + " must have non-empty name");
+        }
+        if (name.length() > maxLength) {
+            throw new IllegalArgumentException(String.valueOf(identifierType) + " name is longer than max length of " + maxLength + ": " + name);
+        }
+    }
+
+    public String toString() {
+        return ToStringBuilder.reflectionToString(this);
+    }
+
+    private void addTable(String tableName, Integer pageNumber) {
+        this._tableLookup.put(Database.toLookupName(tableName), new TableInfo(pageNumber, tableName, 0));
+        this._tableNames = null;
+    }
+
+    private TableInfo lookupTable(String tableName) throws IOException {
+        String lookupTableName = Database.toLookupName(tableName);
+        TableInfo tableInfo = this._tableLookup.get(lookupTableName);
+        if (tableInfo != null) {
+            return tableInfo;
+        }
+        tableInfo = this._tableFinder.lookupTable(tableName);
+        if (tableInfo != null) {
+            this._tableLookup.put(lookupTableName, tableInfo);
+        }
+        return tableInfo;
+    }
+
+    static String toLookupName(String name) {
+        return name != null ? name.toUpperCase() : null;
+    }
+
+    private static boolean isSystemObject(int flags) {
+        return (flags & 0x80000002) != 0;
+    }
+
+    public boolean defaultUseBigIndex() {
+        if (this._useBigIndex != null) {
+            return this._useBigIndex;
+        }
+        String prop = System.getProperty(USE_BIG_INDEX_PROPERTY);
+        if (prop != null) {
+            return Boolean.TRUE.toString().equalsIgnoreCase(prop);
+        }
+        return true;
+    }
+
+    public static TimeZone getDefaultTimeZone() {
+        String tzProp = System.getProperty(TIMEZONE_PROPERTY);
+        if (tzProp != null && (tzProp = tzProp.trim()).length() > 0) {
+            return TimeZone.getTimeZone(tzProp);
+        }
+        return TimeZone.getDefault();
+    }
+
+    public static Charset getDefaultCharset(JetFormat format) {
+        String csProp = System.getProperty(CHARSET_PROPERTY_PREFIX + format);
+        if (csProp != null && (csProp = csProp.trim()).length() > 0) {
+            return Charset.forName(csProp);
+        }
+        return format.CHARSET;
+    }
+
+    public static Table.ColumnOrder getDefaultColumnOrder() {
+        String coProp = System.getProperty(COLUMN_ORDER_PROPERTY);
+        if (coProp != null && (coProp = coProp.trim()).length() > 0) {
+            return Table.ColumnOrder.valueOf(coProp);
+        }
+        return DEFAULT_COLUMN_ORDER;
+    }
+
+    private static void transferFrom(FileChannel channel, InputStream in) throws IOException {
+        ReadableByteChannel readChannel = Channels.newChannel(in);
+        if (!BROKEN_NIO) {
+            channel.transferFrom(readChannel, 0L, 350000L);
+        } else {
+            ByteBuffer bb = ByteBuffer.allocate(8096);
+            while (readChannel.read(bb) >= 0) {
+                bb.flip();
+                channel.write(bb);
+                bb.clear();
+            }
+        }
+    }
+
+    static byte[] getPasswordMask(ByteBuffer buffer, JetFormat format) {
+        int pwdMaskPos = format.OFFSET_HEADER_DATE;
+        if (pwdMaskPos < 0) {
+            return null;
+        }
+        buffer.position(pwdMaskPos);
+        double dateVal = Double.longBitsToDouble(buffer.getLong());
+        byte[] pwdMask = new byte[4];
+        ByteBuffer.wrap(pwdMask).order(PageChannel.DEFAULT_BYTE_ORDER).putInt((int)dateVal);
+        return pwdMask;
+    }
+
+    static InputStream getResourceAsStream(String resourceName) throws IOException {
+        InputStream stream = Database.class.getClassLoader().getResourceAsStream(resourceName);
+        if (stream == null && (stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourceName)) == null) {
+            throw new IOException("Could not load jackcess resource " + resourceName);
+        }
+        return stream;
+    }
+
+    private final class DefaultTableFinder
+    extends TableFinder {
+        private final IndexCursor _systemCatalogCursor;
+        private IndexCursor _systemCatalogIdCursor;
+
+        private DefaultTableFinder(IndexCursor systemCatalogCursor) {
+            this._systemCatalogCursor = systemCatalogCursor;
+        }
+
+        protected Cursor findRow(Integer parentId, String name) throws IOException {
+            return this._systemCatalogCursor.findRowByEntry(parentId, name) ? this._systemCatalogCursor : null;
+        }
+
+        protected Cursor findRow(Integer objectId) throws IOException {
+            if (this._systemCatalogIdCursor == null) {
+                this._systemCatalogIdCursor = new CursorBuilder(Database.this._systemCatalog).setIndexByColumnNames(Database.CAT_COL_ID).toIndexCursor();
+            }
+            return this._systemCatalogIdCursor.findRowByEntry(objectId) ? this._systemCatalogIdCursor : null;
+        }
+
+        public TableInfo lookupTable(String tableName) throws IOException {
+            if (this.findRow(Database.this._tableParentId, tableName) == null) {
+                return null;
+            }
+            Map<String, Object> row = this._systemCatalogCursor.getCurrentRow(SYSTEM_CATALOG_COLUMNS);
+            Integer pageNumber = (Integer)row.get(Database.CAT_COL_ID);
+            String realName = (String)row.get(Database.CAT_COL_NAME);
+            int flags = (Integer)row.get(Database.CAT_COL_FLAGS);
+            Short type = (Short)row.get(Database.CAT_COL_TYPE);
+            if (!TYPE_TABLE.equals(type)) {
+                return null;
+            }
+            return new TableInfo(pageNumber, realName, flags);
+        }
+
+        protected Cursor getTableNamesCursor() throws IOException {
+            return new CursorBuilder(Database.this._systemCatalog).setIndex(this._systemCatalogCursor.getIndex()).setStartEntry(Database.this._tableParentId, IndexData.MIN_VALUE).setEndEntry(Database.this._tableParentId, IndexData.MAX_VALUE).toIndexCursor();
+        }
+    }
+
+    private final class FallbackTableFinder
+    extends TableFinder {
+        private final Cursor _systemCatalogCursor;
+
+        private FallbackTableFinder(Cursor systemCatalogCursor) {
+            this._systemCatalogCursor = systemCatalogCursor;
+        }
+
+        protected Cursor findRow(Integer parentId, String name) throws IOException {
+            HashMap<String, Object> rowPat = new HashMap<String, Object>();
+            rowPat.put(Database.CAT_COL_PARENT_ID, parentId);
+            rowPat.put(Database.CAT_COL_NAME, name);
+            return this._systemCatalogCursor.findRow(rowPat) ? this._systemCatalogCursor : null;
+        }
+
+        protected Cursor findRow(Integer objectId) throws IOException {
+            Column idCol = Database.this._systemCatalog.getColumn(Database.CAT_COL_ID);
+            return this._systemCatalogCursor.findRow(idCol, objectId) ? this._systemCatalogCursor : null;
+        }
+
+        public TableInfo lookupTable(String tableName) throws IOException {
+            for (Map<String, Object> row : this._systemCatalogCursor.iterable(SYSTEM_CATALOG_TABLE_NAME_COLUMNS)) {
+                String realName;
+                int parentId;
+                Short type = (Short)row.get(Database.CAT_COL_TYPE);
+                if (!TYPE_TABLE.equals(type) || (parentId = ((Integer)row.get(Database.CAT_COL_PARENT_ID)).intValue()) != Database.this._tableParentId || !tableName.equalsIgnoreCase(realName = (String)row.get(Database.CAT_COL_NAME))) continue;
+                Integer pageNumber = (Integer)row.get(Database.CAT_COL_ID);
+                int flags = (Integer)row.get(Database.CAT_COL_FLAGS);
+                return new TableInfo(pageNumber, realName, flags);
+            }
+            return null;
+        }
+
+        protected Cursor getTableNamesCursor() throws IOException {
+            return this._systemCatalogCursor;
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    public static enum FileFormat {
+        V1997(null, JetFormat.VERSION_3),
+        V2000(String.valueOf(RESOURCE_PATH) + "empty.mdb", JetFormat.VERSION_4),
+        V2003(String.valueOf(RESOURCE_PATH) + "empty2003.mdb", JetFormat.VERSION_4),
+        V2007(String.valueOf(RESOURCE_PATH) + "empty2007.accdb", JetFormat.VERSION_12, ".accdb"),
+        V2010(String.valueOf(RESOURCE_PATH) + "empty2010.accdb", JetFormat.VERSION_14, ".accdb"),
+        MSISAM(null, JetFormat.VERSION_MSISAM, ".mny");
+
+        private final String _emptyFile;
+        private final JetFormat _format;
+        private final String _ext;
+
+        private FileFormat(String emptyDBFile, JetFormat jetFormat) {
+            this(emptyDBFile, jetFormat, ".mdb");
+        }
+
+        private FileFormat(String emptyDBFile, JetFormat jetFormat, String ext) {
+            this._emptyFile = emptyDBFile;
+            this._format = jetFormat;
+            this._ext = ext;
+        }
+
+        public JetFormat getJetFormat() {
+            return this._format;
+        }
+
+        public String getFileExtension() {
+            return this._ext;
+        }
+
+        public String toString() {
+            return String.valueOf(this.name()) + ", jetFormat: " + this.getJetFormat();
+        }
+    }
+
+    private static final class TableCache {
+        private final Map<Integer, WeakTableReference> _tables = new HashMap<Integer, WeakTableReference>();
+        private final ReferenceQueue<Table> _queue = new ReferenceQueue();
+
+        private TableCache() {
+        }
+
+        public Table get(Integer pageNumber) {
+            WeakTableReference ref = this._tables.get(pageNumber);
+            return ref != null ? (Table)ref.get() : null;
+        }
+
+        public Table put(Table table) {
+            this.purgeOldRefs();
+            Integer pageNumber = table.getTableDefPageNumber();
+            WeakTableReference ref = new WeakTableReference(pageNumber, table, this._queue);
+            this._tables.put(pageNumber, ref);
+            return table;
+        }
+
+        private void purgeOldRefs() {
+            WeakTableReference oldRef = null;
+            while ((oldRef = (WeakTableReference)this._queue.poll()) != null) {
+                this._tables.remove(oldRef.getPageNumber());
+            }
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private abstract class TableFinder {
+        private TableFinder() {
+        }
+
+        public Integer findObjectId(Integer parentId, String name) throws IOException {
+            Cursor cur = this.findRow(parentId, name);
+            if (cur == null) {
+                return null;
+            }
+            Column idCol = Database.this._systemCatalog.getColumn(Database.CAT_COL_ID);
+            return (Integer)cur.getCurrentRowValue(idCol);
+        }
+
+        public Map<String, Object> getObjectRow(Integer parentId, String name, Collection<String> columns) throws IOException {
+            Cursor cur = this.findRow(parentId, name);
+            return cur != null ? cur.getCurrentRow(columns) : null;
+        }
+
+        public Map<String, Object> getObjectRow(Integer objectId, Collection<String> columns) throws IOException {
+            Cursor cur = this.findRow(objectId);
+            return cur != null ? cur.getCurrentRow(columns) : null;
+        }
+
+        public void getTableNames(Set<String> tableNames) throws IOException {
+            for (Map<String, Object> row : this.getTableNamesCursor().iterable(SYSTEM_CATALOG_TABLE_NAME_COLUMNS)) {
+                String tableName = (String)row.get(Database.CAT_COL_NAME);
+                int flags = (Integer)row.get(Database.CAT_COL_FLAGS);
+                Short type = (Short)row.get(Database.CAT_COL_TYPE);
+                int parentId = (Integer)row.get(Database.CAT_COL_PARENT_ID);
+                if (parentId != Database.this._tableParentId || !TYPE_TABLE.equals(type) || Database.isSystemObject(flags)) continue;
+                tableNames.add(tableName);
+            }
+        }
+
+        protected abstract Cursor findRow(Integer var1, String var2) throws IOException;
+
+        protected abstract Cursor findRow(Integer var1) throws IOException;
+
+        protected abstract Cursor getTableNamesCursor() throws IOException;
+
+        public abstract TableInfo lookupTable(String var1) throws IOException;
+    }
+
+    private static class TableInfo {
+        public final Integer pageNumber;
+        public final String tableName;
+        public final int flags;
+
+        private TableInfo(Integer newPageNumber, String newTableName, int newFlags) {
+            this.pageNumber = newPageNumber;
+            this.tableName = newTableName;
+            this.flags = newFlags;
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private class TableIterator
+    implements Iterator<Table> {
+        private Iterator<String> _tableNameIter;
+
+        private TableIterator() {
+            try {
+                this._tableNameIter = Database.this.getTableNames().iterator();
+            }
+            catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this._tableNameIter.hasNext();
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Table next() {
+            if (!this.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            try {
+                return Database.this.getTable(this._tableNameIter.next());
+            }
+            catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private static final class WeakTableReference
+    extends WeakReference<Table> {
+        private final Integer _pageNumber;
+
+        private WeakTableReference(Integer pageNumber, Table table, ReferenceQueue<Table> queue) {
+            super(table, queue);
+            this._pageNumber = pageNumber;
+        }
+
+        public Integer getPageNumber() {
+            return this._pageNumber;
+        }
+    }
+}
+

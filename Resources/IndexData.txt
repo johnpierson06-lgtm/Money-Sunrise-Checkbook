@@ -1,0 +1,1474 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.healthmarketscience.jackcess;
+
+import com.healthmarketscience.jackcess.BigIndexData;
+import com.healthmarketscience.jackcess.ByteUtil;
+import com.healthmarketscience.jackcess.Column;
+import com.healthmarketscience.jackcess.GeneralIndexCodes;
+import com.healthmarketscience.jackcess.GeneralLegacyIndexCodes;
+import com.healthmarketscience.jackcess.Index;
+import com.healthmarketscience.jackcess.IndexBuilder;
+import com.healthmarketscience.jackcess.IndexCodes;
+import com.healthmarketscience.jackcess.JetFormat;
+import com.healthmarketscience.jackcess.PageChannel;
+import com.healthmarketscience.jackcess.RowId;
+import com.healthmarketscience.jackcess.SimpleIndexData;
+import com.healthmarketscience.jackcess.Table;
+import com.healthmarketscience.jackcess.TempBufferHolder;
+import com.healthmarketscience.jackcess.UsageMap;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public abstract class IndexData {
+    protected static final Log LOG = LogFactory.getLog(Index.class);
+    public static final Entry FIRST_ENTRY = IndexData.createSpecialEntry(RowId.FIRST_ROW_ID);
+    public static final Entry LAST_ENTRY = IndexData.createSpecialEntry(RowId.LAST_ROW_ID);
+    public static final Object MAX_VALUE = new Object();
+    public static final Object MIN_VALUE = new Object();
+    protected static final int INVALID_INDEX_PAGE_NUMBER = 0;
+    static final int MAX_COLUMNS = 10;
+    protected static final byte[] EMPTY_PREFIX = new byte[0];
+    private static final short COLUMN_UNUSED = -1;
+    static final byte ASCENDING_COLUMN_FLAG = 1;
+    static final byte UNIQUE_INDEX_FLAG = 1;
+    static final byte IGNORE_NULLS_INDEX_FLAG = 2;
+    static final byte SPECIAL_INDEX_FLAG = 8;
+    static final byte UNKNOWN_INDEX_FLAG = -128;
+    private static final int MAGIC_INDEX_NUMBER = 1923;
+    private static final ByteOrder ENTRY_BYTE_ORDER = ByteOrder.BIG_ENDIAN;
+    static final Comparator<byte[]> BYTE_CODE_COMPARATOR = new Comparator<byte[]>(){
+
+        @Override
+        public int compare(byte[] left, byte[] right) {
+            if (left == right) {
+                return 0;
+            }
+            if (left == null) {
+                return -1;
+            }
+            if (right == null) {
+                return 1;
+            }
+            int len = Math.min(left.length, right.length);
+            int pos = 0;
+            while (pos < len && left[pos] == right[pos]) {
+                ++pos;
+            }
+            if (pos < len) {
+                return ByteUtil.asUnsignedByte(left[pos]) < ByteUtil.asUnsignedByte(right[pos]) ? -1 : 1;
+            }
+            return left.length < right.length ? -1 : (left.length > right.length ? 1 : 0);
+        }
+    };
+    private final Table _table;
+    private final int _number;
+    private int _rootPageNumber;
+    private final int _uniqueEntryCountOffset;
+    private int _uniqueEntryCount;
+    private final List<ColumnDescriptor> _columns = new ArrayList<ColumnDescriptor>();
+    private final List<Index> _indexes = new ArrayList<Index>();
+    private byte _indexFlags;
+    private UsageMap _ownedPages;
+    private boolean _initialized;
+    private int _modCount;
+    private final TempBufferHolder _indexBufferH = TempBufferHolder.newHolder(TempBufferHolder.Type.SOFT, true);
+    private ByteUtil.ByteStream _entryBuffer;
+    private final int _maxPageEntrySize;
+    private boolean _primaryKey;
+    private boolean _readOnly;
+
+    protected IndexData(Table table, int number, int uniqueEntryCount, int uniqueEntryCountOffset) {
+        this._table = table;
+        this._number = number;
+        this._uniqueEntryCount = uniqueEntryCount;
+        this._uniqueEntryCountOffset = uniqueEntryCountOffset;
+        this._maxPageEntrySize = IndexData.calcMaxPageEntrySize(this._table.getFormat());
+    }
+
+    public static IndexData create(Table table, ByteBuffer tableBuffer, int number, JetFormat format) throws IOException {
+        int uniqueEntryCountOffset = format.OFFSET_INDEX_DEF_BLOCK + number * format.SIZE_INDEX_DEFINITION + 4;
+        int uniqueEntryCount = tableBuffer.getInt(uniqueEntryCountOffset);
+        return table.doUseBigIndex() ? new BigIndexData(table, number, uniqueEntryCount, uniqueEntryCountOffset) : new SimpleIndexData(table, number, uniqueEntryCount, uniqueEntryCountOffset);
+    }
+
+    public Table getTable() {
+        return this._table;
+    }
+
+    public JetFormat getFormat() {
+        return this.getTable().getFormat();
+    }
+
+    public PageChannel getPageChannel() {
+        return this.getTable().getPageChannel();
+    }
+
+    public Index getPrimaryIndex() {
+        return this._indexes.get(0);
+    }
+
+    public List<Index> getIndexes() {
+        return Collections.unmodifiableList(this._indexes);
+    }
+
+    void addIndex(Index index) {
+        if (index.isForeignKey()) {
+            this._indexes.add(index);
+        } else {
+            int pos = this._indexes.size();
+            while (pos > 0) {
+                if (!this._indexes.get(pos - 1).isForeignKey()) break;
+                --pos;
+            }
+            this._indexes.add(pos, index);
+            this._primaryKey |= index.isPrimaryKey();
+        }
+    }
+
+    public byte getIndexFlags() {
+        return this._indexFlags;
+    }
+
+    public int getIndexDataNumber() {
+        return this._number;
+    }
+
+    public int getUniqueEntryCount() {
+        return this._uniqueEntryCount;
+    }
+
+    public int getUniqueEntryCountOffset() {
+        return this._uniqueEntryCountOffset;
+    }
+
+    protected boolean isBackingPrimaryKey() {
+        return this._primaryKey;
+    }
+
+    public boolean shouldIgnoreNulls() {
+        return (this._indexFlags & 2) != 0;
+    }
+
+    public boolean isUnique() {
+        return this.isBackingPrimaryKey() || (this._indexFlags & 1) != 0;
+    }
+
+    public List<ColumnDescriptor> getColumns() {
+        return Collections.unmodifiableList(this._columns);
+    }
+
+    public boolean isInitialized() {
+        return this._initialized;
+    }
+
+    protected int getRootPageNumber() {
+        return this._rootPageNumber;
+    }
+
+    protected void setReadOnly() {
+        this._readOnly = true;
+    }
+
+    protected boolean isReadOnly() {
+        return this._readOnly;
+    }
+
+    protected int getMaxPageEntrySize() {
+        return this._maxPageEntrySize;
+    }
+
+    void addOwnedPage(int pageNumber) throws IOException {
+        this._ownedPages.addPageNumber(pageNumber);
+    }
+
+    protected int getEntryCount() throws IOException {
+        this.initialize();
+        EntryCursor cursor = this.cursor();
+        Entry endEntry = cursor.getLastEntry();
+        int count = 0;
+        while (!endEntry.equals(cursor.getNextEntry())) {
+            ++count;
+        }
+        return count;
+    }
+
+    public void initialize() throws IOException {
+        if (!this._initialized) {
+            this.readIndexEntries();
+            this._initialized = true;
+        }
+    }
+
+    public void update() throws IOException {
+        this.initialize();
+        if (this._readOnly) {
+            throw new UnsupportedOperationException("FIXME cannot write indexes of this type yet, see Database javadoc for info on enabling large index support");
+        }
+        this.updateImpl();
+    }
+
+    public void read(ByteBuffer tableBuffer, List<Column> availableColumns) throws IOException {
+        ByteUtil.forward(tableBuffer, this.getFormat().SKIP_BEFORE_INDEX);
+        int i = 0;
+        while (i < 10) {
+            short columnNumber = tableBuffer.getShort();
+            byte colFlags = tableBuffer.get();
+            if (columnNumber != -1) {
+                Column idxCol = null;
+                for (Column col : availableColumns) {
+                    if (col.getColumnNumber() != columnNumber) continue;
+                    idxCol = col;
+                    break;
+                }
+                if (idxCol == null) {
+                    throw new IOException("Could not find column with number " + columnNumber + " for index");
+                }
+                this._columns.add(this.newColumnDescriptor(idxCol, colFlags));
+            }
+            ++i;
+        }
+        byte umapRowNum = tableBuffer.get();
+        int umapPageNum = ByteUtil.get3ByteInt(tableBuffer);
+        this._ownedPages = UsageMap.read(this.getTable().getDatabase(), umapPageNum, umapRowNum, false);
+        this._rootPageNumber = tableBuffer.getInt();
+        ByteUtil.forward(tableBuffer, this.getFormat().SKIP_BEFORE_INDEX_FLAGS);
+        this._indexFlags = tableBuffer.get();
+        ByteUtil.forward(tableBuffer, this.getFormat().SKIP_AFTER_INDEX_FLAGS);
+    }
+
+    protected static void writeRowCountDefinitions(ByteBuffer buffer, int indexCount, JetFormat format) {
+        ByteUtil.forward(buffer, indexCount * format.SIZE_INDEX_DEFINITION);
+    }
+
+    protected static void writeDefinitions(ByteBuffer buffer, List<Column> columns, List<IndexBuilder> indexes, int tdefPageNumber, PageChannel pageChannel, JetFormat format) throws IOException {
+        ByteBuffer rootPageBuffer = pageChannel.createPageBuffer();
+        IndexData.writeDataPage(rootPageBuffer, SimpleIndexData.NEW_ROOT_DATA_PAGE, tdefPageNumber, format);
+        for (IndexBuilder idx : indexes) {
+            buffer.putInt(1923);
+            List<IndexBuilder.Column> idxColumns = idx.getColumns();
+            int i = 0;
+            while (i < 10) {
+                short columnNumber = -1;
+                byte flags = 0;
+                if (i < idxColumns.size()) {
+                    IndexBuilder.Column idxCol = idxColumns.get(i);
+                    flags = idxCol.getFlags();
+                    for (Column col : columns) {
+                        if (!col.getName().equalsIgnoreCase(idxCol.getName())) continue;
+                        columnNumber = col.getColumnNumber();
+                        break;
+                    }
+                    if (columnNumber == -1) {
+                        throw new IllegalArgumentException("Column with name " + idxCol.getName() + " not found");
+                    }
+                }
+                buffer.putShort(columnNumber);
+                buffer.put(flags);
+                ++i;
+            }
+            buffer.put(idx.getUmapRowNumber());
+            ByteUtil.put3ByteInt(buffer, idx.getUmapPageNumber());
+            pageChannel.writePage(rootPageBuffer, idx.getRootPageNumber());
+            buffer.putInt(idx.getRootPageNumber());
+            buffer.putInt(0);
+            buffer.put(idx.getFlags());
+            ByteUtil.forward(buffer, 5);
+        }
+    }
+
+    public void addRow(Object[] row, RowId rowId) throws IOException {
+        boolean isNullEntry;
+        int nullCount = this.countNullValues(row);
+        boolean bl = isNullEntry = nullCount == this._columns.size();
+        if (this.shouldIgnoreNulls() && isNullEntry) {
+            return;
+        }
+        if (this.isBackingPrimaryKey() && nullCount > 0) {
+            throw new IOException("Null value found in row " + Arrays.asList(row) + " for primary key index " + this);
+        }
+        this.initialize();
+        Entry newEntry = new Entry(this.createEntryBytes(row), rowId);
+        if (this.addEntry(newEntry, isNullEntry, row)) {
+            ++this._modCount;
+        } else {
+            LOG.warn("Added duplicate index entry " + newEntry + " for row: " + Arrays.asList(row));
+        }
+    }
+
+    private boolean addEntry(Entry newEntry, boolean isNullEntry, Object[] row) throws IOException {
+        DataPage dataPage = this.findDataPage(newEntry);
+        int idx = dataPage.findEntry(newEntry);
+        if (idx < 0) {
+            boolean isDupeEntry;
+            idx = IndexData.missingIndexToInsertionPoint(idx);
+            Position newPos = new Position(dataPage, idx, newEntry, true);
+            Position nextPos = this.getNextPosition(newPos);
+            Position prevPos = this.getPreviousPosition(newPos);
+            boolean bl = isDupeEntry = nextPos != null && newEntry.equalsEntryBytes(nextPos.getEntry()) || prevPos != null && newEntry.equalsEntryBytes(prevPos.getEntry());
+            if (this.isUnique() && !isNullEntry && isDupeEntry) {
+                throw new IOException("New row " + Arrays.asList(row) + " violates uniqueness constraint for index " + this);
+            }
+            if (!isDupeEntry) {
+                ++this._uniqueEntryCount;
+            }
+            dataPage.addEntry(idx, newEntry);
+            return true;
+        }
+        return false;
+    }
+
+    public void deleteRow(Object[] row, RowId rowId) throws IOException {
+        int nullCount = this.countNullValues(row);
+        if (this.shouldIgnoreNulls() && nullCount == this._columns.size()) {
+            return;
+        }
+        this.initialize();
+        Entry oldEntry = new Entry(this.createEntryBytes(row), rowId);
+        if (this.removeEntry(oldEntry)) {
+            ++this._modCount;
+        } else {
+            LOG.warn("Failed removing index entry " + oldEntry + " for row: " + Arrays.asList(row));
+        }
+    }
+
+    private boolean removeEntry(Entry oldEntry) throws IOException {
+        DataPage dataPage = this.findDataPage(oldEntry);
+        int idx = dataPage.findEntry(oldEntry);
+        boolean doRemove = false;
+        if (idx < 0) {
+            EntryCursor cursor = this.cursor();
+            Position tmpPos = null;
+            Position endPos = cursor._lastPos;
+            while (!endPos.equals(tmpPos = cursor.getAnotherPosition(true))) {
+                if (!tmpPos.getEntry().getRowId().equals(oldEntry.getRowId())) continue;
+                dataPage = tmpPos.getDataPage();
+                idx = tmpPos.getIndex();
+                doRemove = true;
+                break;
+            }
+        } else {
+            doRemove = true;
+        }
+        if (doRemove) {
+            dataPage.removeEntry(idx);
+        }
+        return doRemove;
+    }
+
+    public EntryCursor cursor() throws IOException {
+        return this.cursor(null, true, null, true);
+    }
+
+    public EntryCursor cursor(Object[] startRow, boolean startInclusive, Object[] endRow, boolean endInclusive) throws IOException {
+        this.initialize();
+        Entry startEntry = FIRST_ENTRY;
+        byte[] startEntryBytes = null;
+        if (startRow != null) {
+            startEntryBytes = this.createEntryBytes(startRow);
+            startEntry = new Entry(startEntryBytes, startInclusive ? RowId.FIRST_ROW_ID : RowId.LAST_ROW_ID);
+        }
+        Entry endEntry = LAST_ENTRY;
+        if (endRow != null) {
+            byte[] endEntryBytes = startRow == endRow ? startEntryBytes : this.createEntryBytes(endRow);
+            endEntry = new Entry(endEntryBytes, endInclusive ? RowId.LAST_ROW_ID : RowId.FIRST_ROW_ID);
+        }
+        return new EntryCursor(this.findEntryPosition(startEntry), this.findEntryPosition(endEntry));
+    }
+
+    private Position findEntryPosition(Entry entry) throws IOException {
+        DataPage dataPage = this.findDataPage(entry);
+        int idx = dataPage.findEntry(entry);
+        boolean between = false;
+        if (idx < 0) {
+            idx = IndexData.missingIndexToInsertionPoint(idx);
+            between = true;
+        }
+        return new Position(dataPage, idx, entry, between);
+    }
+
+    private Position getNextPosition(Position curPos) throws IOException {
+        int nextIdx = curPos.getNextIndex();
+        Position nextPos = null;
+        if (nextIdx < curPos.getDataPage().getEntries().size()) {
+            nextPos = new Position(curPos.getDataPage(), nextIdx);
+        } else {
+            int nextPageNumber = curPos.getDataPage().getNextPageNumber();
+            DataPage nextDataPage = null;
+            while (nextPageNumber != 0) {
+                DataPage dp = this.getDataPage(nextPageNumber);
+                if (!dp.isEmpty()) {
+                    nextDataPage = dp;
+                    break;
+                }
+                nextPageNumber = dp.getNextPageNumber();
+            }
+            if (nextDataPage != null) {
+                nextPos = new Position(nextDataPage, 0);
+            }
+        }
+        return nextPos;
+    }
+
+    private Position getPreviousPosition(Position curPos) throws IOException {
+        int prevIdx = curPos.getPrevIndex();
+        Position prevPos = null;
+        if (prevIdx >= 0) {
+            prevPos = new Position(curPos.getDataPage(), prevIdx);
+        } else {
+            int prevPageNumber = curPos.getDataPage().getPrevPageNumber();
+            DataPage prevDataPage = null;
+            while (prevPageNumber != 0) {
+                DataPage dp = this.getDataPage(prevPageNumber);
+                if (!dp.isEmpty()) {
+                    prevDataPage = dp;
+                    break;
+                }
+                prevPageNumber = dp.getPrevPageNumber();
+            }
+            if (prevDataPage != null) {
+                prevPos = new Position(prevDataPage, prevDataPage.getEntries().size() - 1);
+            }
+        }
+        return prevPos;
+    }
+
+    protected static int missingIndexToInsertionPoint(int idx) {
+        return -(idx + 1);
+    }
+
+    public Object[] constructIndexRowFromEntry(Object ... values) {
+        if (values.length != this._columns.size()) {
+            throw new IllegalArgumentException("Wrong number of column values given " + values.length + ", expected " + this._columns.size());
+        }
+        int valIdx = 0;
+        Object[] idxRow = new Object[this.getTable().getColumnCount()];
+        for (ColumnDescriptor col : this._columns) {
+            idxRow[col.getColumnIndex()] = values[valIdx++];
+        }
+        return idxRow;
+    }
+
+    public Object[] constructIndexRow(String colName, Object value) {
+        return this.constructIndexRow(Collections.singletonMap(colName, value));
+    }
+
+    public Object[] constructIndexRow(Map<String, Object> row) {
+        for (ColumnDescriptor col : this._columns) {
+            if (row.containsKey(col.getName())) continue;
+            return null;
+        }
+        Object[] idxRow = new Object[this.getTable().getColumnCount()];
+        for (ColumnDescriptor col : this._columns) {
+            idxRow[col.getColumnIndex()] = row.get(col.getName());
+        }
+        return idxRow;
+    }
+
+    public String toString() {
+        StringBuilder rtn = new StringBuilder();
+        rtn.append("\n\tData number: ").append(this._number);
+        rtn.append("\n\tPage number: ").append(this._rootPageNumber);
+        rtn.append("\n\tIs Backing Primary Key: ").append(this.isBackingPrimaryKey());
+        rtn.append("\n\tIs Unique: ").append(this.isUnique());
+        rtn.append("\n\tIgnore Nulls: ").append(this.shouldIgnoreNulls());
+        rtn.append("\n\tColumns: ").append(this._columns);
+        rtn.append("\n\tInitialized: ").append(this._initialized);
+        if (this._initialized) {
+            try {
+                rtn.append("\n\tEntryCount: ").append(this.getEntryCount());
+            }
+            catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return rtn.toString();
+    }
+
+    protected void writeDataPage(DataPage dataPage) throws IOException {
+        if (dataPage.getCompressedEntrySize() > this._maxPageEntrySize) {
+            if (this instanceof SimpleIndexData) {
+                throw new UnsupportedOperationException("FIXME cannot write large index yet, see Database javadoc for info on enabling large index support");
+            }
+            throw new IllegalStateException("data page is too large");
+        }
+        ByteBuffer buffer = this._indexBufferH.getPageBuffer(this.getPageChannel());
+        IndexData.writeDataPage(buffer, dataPage, this.getTable().getTableDefPageNumber(), this.getFormat());
+        this.getPageChannel().writePage(buffer, dataPage.getPageNumber());
+    }
+
+    protected static void writeDataPage(ByteBuffer buffer, DataPage dataPage, int tdefPageNumber, JetFormat format) throws IOException {
+        buffer.put(dataPage.isLeaf() ? (byte)4 : 3);
+        buffer.put((byte)1);
+        buffer.putShort((short)0);
+        buffer.putInt(tdefPageNumber);
+        buffer.putInt(0);
+        buffer.putInt(dataPage.getPrevPageNumber());
+        buffer.putInt(dataPage.getNextPageNumber());
+        buffer.putInt(dataPage.getChildTailPageNumber());
+        byte[] entryPrefix = dataPage.getEntryPrefix();
+        buffer.putShort((short)entryPrefix.length);
+        buffer.put((byte)0);
+        byte[] entryMask = new byte[format.SIZE_INDEX_ENTRY_MASK];
+        int totalSize = entryPrefix.length;
+        for (Entry entry : dataPage.getEntries()) {
+            int idx;
+            int n = idx = (totalSize += entry.size() - entryPrefix.length) / 8;
+            entryMask[n] = (byte)(entryMask[n] | 1 << totalSize % 8);
+        }
+        buffer.put(entryMask);
+        buffer.put(entryPrefix);
+        for (Entry entry : dataPage.getEntries()) {
+            entry.write(buffer, entryPrefix);
+        }
+        buffer.putShort(2, (short)(format.PAGE_SIZE - buffer.position()));
+    }
+
+    protected void readDataPage(DataPage dataPage) throws IOException {
+        ByteBuffer buffer = this._indexBufferH.getPageBuffer(this.getPageChannel());
+        this.getPageChannel().readPage(buffer, dataPage.getPageNumber());
+        boolean isLeaf = IndexData.isLeafPage(buffer);
+        dataPage.setLeaf(isLeaf);
+        int entryPrefixLength = ByteUtil.getUnsignedShort(buffer, this.getFormat().OFFSET_INDEX_COMPRESSED_BYTE_COUNT);
+        int entryMaskLength = this.getFormat().SIZE_INDEX_ENTRY_MASK;
+        int entryMaskPos = this.getFormat().OFFSET_INDEX_ENTRY_MASK;
+        int entryPos = entryMaskPos + entryMaskLength;
+        int lastStart = 0;
+        int totalEntrySize = 0;
+        byte[] entryPrefix = null;
+        ArrayList<Entry> entries = new ArrayList<Entry>();
+        TempBufferHolder tmpEntryBufferH = TempBufferHolder.newHolder(TempBufferHolder.Type.HARD, true, ENTRY_BYTE_ORDER);
+        Entry prevEntry = FIRST_ENTRY;
+        int i = 0;
+        while (i < entryMaskLength) {
+            byte entryMask = buffer.get(entryMaskPos + i);
+            int j = 0;
+            while (j < 8) {
+                if ((entryMask & 1 << j) != 0) {
+                    int length = i * 8 + j - lastStart;
+                    buffer.position(entryPos + lastStart);
+                    ByteBuffer curEntryBuffer = buffer;
+                    int curEntryLen = length;
+                    if (entryPrefix != null) {
+                        curEntryBuffer = this.getTempEntryBuffer(buffer, length, entryPrefix, tmpEntryBufferH);
+                        curEntryLen += entryPrefix.length;
+                    }
+                    totalEntrySize += curEntryLen;
+                    Entry entry = this.newEntry(curEntryBuffer, curEntryLen, isLeaf);
+                    if (prevEntry.compareTo(entry) >= 0) {
+                        throw new IOException("Unexpected order in index entries, " + prevEntry + " >= " + entry);
+                    }
+                    entries.add(entry);
+                    if (entries.size() == 1 && entryPrefixLength > 0) {
+                        entryPrefix = new byte[entryPrefixLength];
+                        buffer.position(entryPos + lastStart);
+                        buffer.get(entryPrefix);
+                    }
+                    lastStart += length;
+                    prevEntry = entry;
+                }
+                ++j;
+            }
+            ++i;
+        }
+        dataPage.setEntryPrefix(entryPrefix != null ? entryPrefix : EMPTY_PREFIX);
+        dataPage.setEntries(entries);
+        dataPage.setTotalEntrySize(totalEntrySize);
+        int prevPageNumber = buffer.getInt(this.getFormat().OFFSET_PREV_INDEX_PAGE);
+        int nextPageNumber = buffer.getInt(this.getFormat().OFFSET_NEXT_INDEX_PAGE);
+        int childTailPageNumber = buffer.getInt(this.getFormat().OFFSET_CHILD_TAIL_INDEX_PAGE);
+        dataPage.setPrevPageNumber(prevPageNumber);
+        dataPage.setNextPageNumber(nextPageNumber);
+        dataPage.setChildTailPageNumber(childTailPageNumber);
+    }
+
+    private Entry newEntry(ByteBuffer buffer, int entryLength, boolean isLeaf) throws IOException {
+        if (isLeaf) {
+            return new Entry(buffer, entryLength);
+        }
+        return new NodeEntry(buffer, entryLength);
+    }
+
+    private ByteBuffer getTempEntryBuffer(ByteBuffer indexPage, int entryLen, byte[] valuePrefix, TempBufferHolder tmpEntryBufferH) {
+        ByteBuffer tmpEntryBuffer = tmpEntryBufferH.getBuffer(this.getPageChannel(), valuePrefix.length + entryLen);
+        tmpEntryBuffer.put(valuePrefix);
+        tmpEntryBuffer.put(indexPage.array(), indexPage.position(), entryLen);
+        tmpEntryBuffer.flip();
+        return tmpEntryBuffer;
+    }
+
+    private static boolean isLeafPage(ByteBuffer buffer) throws IOException {
+        byte pageType = buffer.get(0);
+        if (pageType == 4) {
+            return true;
+        }
+        if (pageType == 3) {
+            return false;
+        }
+        throw new IOException("Unexpected page type " + pageType);
+    }
+
+    private int countNullValues(Object[] values) {
+        if (values == null) {
+            return this._columns.size();
+        }
+        int nullCount = 0;
+        for (ColumnDescriptor col : this._columns) {
+            Object value;
+            if (!col.isNullValue(value = values[col.getColumnIndex()])) continue;
+            ++nullCount;
+        }
+        return nullCount;
+    }
+
+    private byte[] createEntryBytes(Object[] values) throws IOException {
+        if (values == null) {
+            return null;
+        }
+        if (this._entryBuffer == null) {
+            this._entryBuffer = new ByteUtil.ByteStream();
+        }
+        this._entryBuffer.reset();
+        for (ColumnDescriptor col : this._columns) {
+            Object value = values[col.getColumnIndex()];
+            if (Column.isRawData(value)) continue;
+            if (value == MIN_VALUE) {
+                this._entryBuffer.write(IndexCodes.getNullEntryFlag(col.isAscending()));
+                continue;
+            }
+            if (value == MAX_VALUE) {
+                this._entryBuffer.write(IndexCodes.getNullEntryFlag(!col.isAscending()));
+                continue;
+            }
+            col.writeValue(value, this._entryBuffer);
+        }
+        return this._entryBuffer.toByteArray();
+    }
+
+    protected abstract void updateImpl() throws IOException;
+
+    protected abstract void readIndexEntries() throws IOException;
+
+    protected abstract DataPage findDataPage(Entry var1) throws IOException;
+
+    protected abstract DataPage getDataPage(int var1) throws IOException;
+
+    private static byte[] flipFirstBitInByte(byte[] value, int index) {
+        value[index] = (byte)(value[index] ^ 0x80);
+        return value;
+    }
+
+    private static byte[] flipBytes(byte[] value) {
+        return IndexData.flipBytes(value, 0, value.length);
+    }
+
+    static byte[] flipBytes(byte[] value, int offset, int length) {
+        int i = offset;
+        while (i < offset + length) {
+            value[i] = ~value[i];
+            ++i;
+        }
+        return value;
+    }
+
+    private static byte[] encodeNumberColumnValue(Object value, Column column) throws IOException {
+        return column.write(value, 0, ENTRY_BYTE_ORDER).array();
+    }
+
+    private static Entry createSpecialEntry(RowId rowId) {
+        return new Entry(null, rowId);
+    }
+
+    private ColumnDescriptor newColumnDescriptor(Column col, byte flags) throws IOException {
+        switch (col.getType()) {
+            case TEXT: 
+            case MEMO: {
+                Column.SortOrder sortOrder = col.getTextSortOrder();
+                if (Column.GENERAL_LEGACY_SORT_ORDER.equals(sortOrder)) {
+                    return new GenLegTextColumnDescriptor(col, flags);
+                }
+                if (Column.GENERAL_SORT_ORDER.equals(sortOrder)) {
+                    return new GenTextColumnDescriptor(col, flags);
+                }
+                LOG.warn("Unsupported collating sort order " + sortOrder + " for text index, making read-only");
+                this.setReadOnly();
+                return new ReadOnlyColumnDescriptor(col, flags);
+            }
+            case INT: 
+            case LONG: 
+            case MONEY: {
+                return new IntegerColumnDescriptor(col, flags);
+            }
+            case FLOAT: 
+            case DOUBLE: 
+            case SHORT_DATE_TIME: {
+                return new FloatingPointColumnDescriptor(col, flags);
+            }
+            case NUMERIC: {
+                return col.getFormat().LEGACY_NUMERIC_INDEXES ? new LegacyFixedPointColumnDescriptor(col, flags, null, null) : new FixedPointColumnDescriptor(col, flags);
+            }
+            case BYTE: {
+                return new ByteColumnDescriptor(col, flags);
+            }
+            case BOOLEAN: {
+                return new BooleanColumnDescriptor(col, flags);
+            }
+            case GUID: {
+                return new GuidColumnDescriptor(col, flags);
+            }
+        }
+        LOG.warn("Unsupported data type " + (Object)((Object)col.getType()) + " for index, making read-only");
+        this.setReadOnly();
+        return new ReadOnlyColumnDescriptor(col, flags);
+    }
+
+    private static EntryType determineEntryType(byte[] entryBytes, RowId rowId) {
+        if (entryBytes != null) {
+            return rowId.getType() == RowId.Type.NORMAL ? EntryType.NORMAL : (rowId.getType() == RowId.Type.ALWAYS_FIRST ? EntryType.FIRST_VALID : EntryType.LAST_VALID);
+        }
+        if (!rowId.isValid()) {
+            return rowId.getType() == RowId.Type.ALWAYS_FIRST ? EntryType.ALWAYS_FIRST : EntryType.ALWAYS_LAST;
+        }
+        throw new IllegalArgumentException("Values was null for valid entry");
+    }
+
+    private static int calcMaxPageEntrySize(JetFormat format) {
+        int pageDataSize = format.PAGE_SIZE - (format.OFFSET_INDEX_ENTRY_MASK + format.SIZE_INDEX_ENTRY_MASK);
+        int entryMaskSize = format.SIZE_INDEX_ENTRY_MASK * 8;
+        return Math.min(pageDataSize, entryMaskSize);
+    }
+
+    private static final class BooleanColumnDescriptor
+    extends ColumnDescriptor {
+        private BooleanColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected boolean isNullValue(Object value) {
+            return false;
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            bout.write(Column.toBooleanValue(value) ? (this.isAscending() ? 0 : -1) : (this.isAscending() ? -1 : 0));
+        }
+    }
+
+    private static final class ByteColumnDescriptor
+    extends ColumnDescriptor {
+        private ByteColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            byte[] valueBytes = IndexData.encodeNumberColumnValue(value, this.getColumn());
+            if (!this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+            bout.write(valueBytes);
+        }
+    }
+
+    public static abstract class ColumnDescriptor {
+        private final Column _column;
+        private final byte _flags;
+
+        private ColumnDescriptor(Column column, byte flags) throws IOException {
+            this._column = column;
+            this._flags = flags;
+        }
+
+        public Column getColumn() {
+            return this._column;
+        }
+
+        public byte getFlags() {
+            return this._flags;
+        }
+
+        public boolean isAscending() {
+            return (this.getFlags() & 1) != 0;
+        }
+
+        public int getColumnIndex() {
+            return this.getColumn().getColumnIndex();
+        }
+
+        public String getName() {
+            return this.getColumn().getName();
+        }
+
+        protected boolean isNullValue(Object value) {
+            return value == null;
+        }
+
+        protected final void writeValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            if (this.isNullValue(value)) {
+                bout.write(IndexCodes.getNullEntryFlag(this.isAscending()));
+                return;
+            }
+            bout.write(IndexCodes.getStartEntryFlag(this.isAscending()));
+            this.writeNonNullValue(value, bout);
+        }
+
+        protected abstract void writeNonNullValue(Object var1, ByteUtil.ByteStream var2) throws IOException;
+
+        public String toString() {
+            return "ColumnDescriptor " + this.getColumn() + "\nflags: " + this.getFlags();
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    protected static abstract class DataPage {
+        protected DataPage() {
+        }
+
+        public abstract int getPageNumber();
+
+        public abstract boolean isLeaf();
+
+        public abstract void setLeaf(boolean var1);
+
+        public abstract int getPrevPageNumber();
+
+        public abstract void setPrevPageNumber(int var1);
+
+        public abstract int getNextPageNumber();
+
+        public abstract void setNextPageNumber(int var1);
+
+        public abstract int getChildTailPageNumber();
+
+        public abstract void setChildTailPageNumber(int var1);
+
+        public abstract int getTotalEntrySize();
+
+        public abstract void setTotalEntrySize(int var1);
+
+        public abstract byte[] getEntryPrefix();
+
+        public abstract void setEntryPrefix(byte[] var1);
+
+        public abstract List<Entry> getEntries();
+
+        public abstract void setEntries(List<Entry> var1);
+
+        public abstract void addEntry(int var1, Entry var2) throws IOException;
+
+        public abstract void removeEntry(int var1) throws IOException;
+
+        public final boolean isEmpty() {
+            return this.getEntries().isEmpty();
+        }
+
+        public final int getCompressedEntrySize() {
+            return this.getTotalEntrySize() - this.getEntryPrefix().length * (this.getEntries().size() - 1);
+        }
+
+        public final int findEntry(Entry entry) {
+            return Collections.binarySearch(this.getEntries(), entry);
+        }
+
+        public final int hashCode() {
+            return this.getPageNumber();
+        }
+
+        public final boolean equals(Object o) {
+            return this == o || o != null && this.getClass() == o.getClass() && this.getPageNumber() == ((DataPage)o).getPageNumber();
+        }
+
+        public final String toString() {
+            List<Entry> entries = this.getEntries();
+            return String.valueOf(this.isLeaf() ? "Leaf" : "Node") + "DataPage[" + this.getPageNumber() + "] " + this.getPrevPageNumber() + ", " + this.getNextPageNumber() + ", (" + this.getChildTailPageNumber() + "), " + (this.isLeaf() && !entries.isEmpty() ? "[" + entries.get(0) + ", " + entries.get(entries.size() - 1) + "]" : entries);
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    public static class Entry
+    implements Comparable<Entry> {
+        private final RowId _rowId;
+        private final byte[] _entryBytes;
+        private final EntryType _type;
+
+        private Entry(byte[] entryBytes, RowId rowId, EntryType type) {
+            this._rowId = rowId;
+            this._entryBytes = entryBytes;
+            this._type = type;
+        }
+
+        private Entry(byte[] entryBytes, RowId rowId) {
+            this(entryBytes, rowId, IndexData.determineEntryType(entryBytes, rowId));
+        }
+
+        private Entry(ByteBuffer buffer, int entryLen) throws IOException {
+            this(buffer, entryLen, 0);
+        }
+
+        private Entry(ByteBuffer buffer, int entryLen, int extraTrailingLen) throws IOException {
+            int colEntryLen = entryLen - (4 + extraTrailingLen);
+            this._entryBytes = new byte[colEntryLen];
+            buffer.get(this._entryBytes);
+            int page = ByteUtil.get3ByteInt(buffer, ENTRY_BYTE_ORDER);
+            int row = ByteUtil.getUnsignedByte(buffer);
+            this._rowId = new RowId(page, row);
+            this._type = EntryType.NORMAL;
+        }
+
+        public RowId getRowId() {
+            return this._rowId;
+        }
+
+        public EntryType getType() {
+            return this._type;
+        }
+
+        public Integer getSubPageNumber() {
+            throw new UnsupportedOperationException();
+        }
+
+        public boolean isLeafEntry() {
+            return true;
+        }
+
+        public boolean isValid() {
+            return this._entryBytes != null;
+        }
+
+        protected final byte[] getEntryBytes() {
+            return this._entryBytes;
+        }
+
+        protected int size() {
+            return this._entryBytes.length + 4;
+        }
+
+        protected void write(ByteBuffer buffer, byte[] prefix) throws IOException {
+            if (prefix.length <= this._entryBytes.length) {
+                buffer.put(this._entryBytes, prefix.length, this._entryBytes.length - prefix.length);
+                ByteUtil.put3ByteInt(buffer, this.getRowId().getPageNumber(), ENTRY_BYTE_ORDER);
+            } else if (prefix.length <= this._entryBytes.length + 3) {
+                ByteBuffer tmp = ByteBuffer.allocate(3);
+                ByteUtil.put3ByteInt(tmp, this.getRowId().getPageNumber(), ENTRY_BYTE_ORDER);
+                tmp.flip();
+                tmp.position(prefix.length - this._entryBytes.length);
+                buffer.put(tmp);
+            } else {
+                throw new IllegalStateException("prefix should never be this long");
+            }
+            buffer.put((byte)this.getRowId().getRowNumber());
+        }
+
+        protected final String entryBytesToString() {
+            return this.isValid() ? ", Bytes = " + ByteUtil.toHexString(ByteBuffer.wrap(this._entryBytes), this._entryBytes.length) : "";
+        }
+
+        public String toString() {
+            return "RowId = " + this._rowId + this.entryBytesToString() + "\n";
+        }
+
+        public int hashCode() {
+            return this._rowId.hashCode();
+        }
+
+        public boolean equals(Object o) {
+            return this == o || o != null && this.getClass() == o.getClass() && this.compareTo((Entry)o) == 0;
+        }
+
+        public boolean equalsEntryBytes(Entry o) {
+            return BYTE_CODE_COMPARATOR.compare(this._entryBytes, o._entryBytes) == 0;
+        }
+
+        @Override
+        public int compareTo(Entry other) {
+            if (this == other) {
+                return 0;
+            }
+            if (this.isValid() && other.isValid()) {
+                int entryCmp = BYTE_CODE_COMPARATOR.compare(this._entryBytes, other._entryBytes);
+                if (entryCmp != 0) {
+                    return entryCmp;
+                }
+            } else {
+                int typeCmp = this._type.compareTo(other._type);
+                if (typeCmp != 0) {
+                    return typeCmp;
+                }
+            }
+            return this._rowId.compareTo(other.getRowId());
+        }
+
+        protected Entry asNodeEntry(Integer subPageNumber) {
+            return new NodeEntry(this._entryBytes, this._rowId, this._type, subPageNumber);
+        }
+    }
+
+    public final class EntryCursor {
+        private final DirHandler _forwardDirHandler = new ForwardDirHandler();
+        private final DirHandler _reverseDirHandler = new ReverseDirHandler();
+        private Position _firstPos;
+        private Position _lastPos;
+        private Position _curPos;
+        private Position _prevPos;
+        private int _lastModCount;
+
+        private EntryCursor(Position firstPos, Position lastPos) {
+            this._firstPos = firstPos;
+            this._lastPos = lastPos;
+            this._lastModCount = this.getIndexModCount();
+            this.reset();
+        }
+
+        private DirHandler getDirHandler(boolean moveForward) {
+            return moveForward ? this._forwardDirHandler : this._reverseDirHandler;
+        }
+
+        public IndexData getIndexData() {
+            return IndexData.this;
+        }
+
+        private int getIndexModCount() {
+            return IndexData.this._modCount;
+        }
+
+        public Entry getFirstEntry() {
+            return this._firstPos.getEntry();
+        }
+
+        public Entry getLastEntry() {
+            return this._lastPos.getEntry();
+        }
+
+        public boolean isUpToDate() {
+            return this.getIndexModCount() == this._lastModCount;
+        }
+
+        public void reset() {
+            this.beforeFirst();
+        }
+
+        public void beforeFirst() {
+            this.reset(true);
+        }
+
+        public void afterLast() {
+            this.reset(false);
+        }
+
+        protected void reset(boolean moveForward) {
+            this._prevPos = this._curPos = this.getDirHandler(moveForward).getBeginningPosition();
+        }
+
+        public void beforeEntry(Object[] row) throws IOException {
+            this.restorePosition(new Entry(IndexData.this.createEntryBytes(row), RowId.FIRST_ROW_ID));
+        }
+
+        public void afterEntry(Object[] row) throws IOException {
+            this.restorePosition(new Entry(IndexData.this.createEntryBytes(row), RowId.LAST_ROW_ID));
+        }
+
+        public Entry getNextEntry() throws IOException {
+            return this.getAnotherPosition(true).getEntry();
+        }
+
+        public Entry getPreviousEntry() throws IOException {
+            return this.getAnotherPosition(false).getEntry();
+        }
+
+        protected void restorePosition(Entry curEntry) throws IOException {
+            this.restorePosition(curEntry, this._curPos.getEntry());
+        }
+
+        protected void restorePosition(Entry curEntry, Entry prevEntry) throws IOException {
+            if (!this._curPos.equalsEntry(curEntry) || !this._prevPos.equalsEntry(prevEntry)) {
+                if (!this.isUpToDate()) {
+                    this.updateBounds();
+                    this._lastModCount = this.getIndexModCount();
+                }
+                this._prevPos = this.updatePosition(prevEntry);
+                this._curPos = this.updatePosition(curEntry);
+            } else {
+                this.checkForModification();
+            }
+        }
+
+        private Position getAnotherPosition(boolean moveForward) throws IOException {
+            DirHandler handler = this.getDirHandler(moveForward);
+            if (this._curPos.equals(handler.getEndPosition())) {
+                if (!this.isUpToDate()) {
+                    this.restorePosition(this._prevPos.getEntry());
+                } else {
+                    return this._curPos;
+                }
+            }
+            this.checkForModification();
+            this._prevPos = this._curPos;
+            this._curPos = handler.getAnotherPosition(this._curPos);
+            return this._curPos;
+        }
+
+        private void checkForModification() throws IOException {
+            if (!this.isUpToDate()) {
+                this.updateBounds();
+                this._prevPos = this.updatePosition(this._prevPos.getEntry());
+                this._curPos = this.updatePosition(this._curPos.getEntry());
+                this._lastModCount = this.getIndexModCount();
+            }
+        }
+
+        private Position updatePosition(Entry entry) throws IOException {
+            if (!entry.isValid()) {
+                if (this._firstPos.equalsEntry(entry)) {
+                    return this._firstPos;
+                }
+                if (this._lastPos.equalsEntry(entry)) {
+                    return this._lastPos;
+                }
+                throw new IllegalArgumentException("Invalid entry given " + entry);
+            }
+            Position pos = IndexData.this.findEntryPosition(entry);
+            if (pos.compareTo(this._lastPos) >= 0) {
+                return this._lastPos;
+            }
+            if (pos.compareTo(this._firstPos) <= 0) {
+                return this._firstPos;
+            }
+            return pos;
+        }
+
+        private void updateBounds() throws IOException {
+            this._firstPos = IndexData.this.findEntryPosition(this._firstPos.getEntry());
+            this._lastPos = IndexData.this.findEntryPosition(this._lastPos.getEntry());
+        }
+
+        public String toString() {
+            return String.valueOf(this.getClass().getSimpleName()) + " CurPosition " + this._curPos + ", PrevPosition " + this._prevPos;
+        }
+
+        private abstract class DirHandler {
+            private DirHandler() {
+            }
+
+            public abstract Position getAnotherPosition(Position var1) throws IOException;
+
+            public abstract Position getBeginningPosition();
+
+            public abstract Position getEndPosition();
+        }
+
+        private final class ForwardDirHandler
+        extends DirHandler {
+            private ForwardDirHandler() {
+            }
+
+            public Position getAnotherPosition(Position curPos) throws IOException {
+                Position newPos = IndexData.this.getNextPosition(curPos);
+                if (newPos == null || newPos.compareTo(EntryCursor.this._lastPos) >= 0) {
+                    newPos = EntryCursor.this._lastPos;
+                }
+                return newPos;
+            }
+
+            public Position getBeginningPosition() {
+                return EntryCursor.this._firstPos;
+            }
+
+            public Position getEndPosition() {
+                return EntryCursor.this._lastPos;
+            }
+        }
+
+        private final class ReverseDirHandler
+        extends DirHandler {
+            private ReverseDirHandler() {
+            }
+
+            public Position getAnotherPosition(Position curPos) throws IOException {
+                Position newPos = IndexData.this.getPreviousPosition(curPos);
+                if (newPos == null || newPos.compareTo(EntryCursor.this._firstPos) <= 0) {
+                    newPos = EntryCursor.this._firstPos;
+                }
+                return newPos;
+            }
+
+            public Position getBeginningPosition() {
+                return EntryCursor.this._lastPos;
+            }
+
+            public Position getEndPosition() {
+                return EntryCursor.this._firstPos;
+            }
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    public static enum EntryType {
+        ALWAYS_FIRST,
+        FIRST_VALID,
+        NORMAL,
+        LAST_VALID,
+        ALWAYS_LAST;
+
+    }
+
+    private static final class FixedPointColumnDescriptor
+    extends LegacyFixedPointColumnDescriptor {
+        private FixedPointColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void handleNegationAndOrder(boolean isNegative, byte[] valueBytes) {
+            valueBytes[0] = -1;
+            if (isNegative == this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+        }
+    }
+
+    private static final class FloatingPointColumnDescriptor
+    extends ColumnDescriptor {
+        private FloatingPointColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            boolean isNegative;
+            byte[] valueBytes = IndexData.encodeNumberColumnValue(value, this.getColumn());
+            boolean bl = isNegative = (valueBytes[0] & 0x80) != 0;
+            if (!isNegative) {
+                IndexData.flipFirstBitInByte(valueBytes, 0);
+            }
+            if (isNegative == this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+            bout.write(valueBytes);
+        }
+    }
+
+    private static final class GenLegTextColumnDescriptor
+    extends ColumnDescriptor {
+        private GenLegTextColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            GeneralLegacyIndexCodes.GEN_LEG_INSTANCE.writeNonNullIndexTextValue(value, bout, this.isAscending());
+        }
+    }
+
+    private static final class GenTextColumnDescriptor
+    extends ColumnDescriptor {
+        private GenTextColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            GeneralIndexCodes.GEN_INSTANCE.writeNonNullIndexTextValue(value, bout, this.isAscending());
+        }
+    }
+
+    private static final class GuidColumnDescriptor
+    extends ColumnDescriptor {
+        private GuidColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            byte[] valueBytes = IndexData.encodeNumberColumnValue(value, this.getColumn());
+            if (!this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+            bout.write(valueBytes, 0, 8);
+            bout.write(9);
+            bout.write(valueBytes, 8, 8);
+            bout.write(this.isAscending() ? 8 : -9);
+        }
+    }
+
+    private static final class IntegerColumnDescriptor
+    extends ColumnDescriptor {
+        private IntegerColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            byte[] valueBytes = IndexData.encodeNumberColumnValue(value, this.getColumn());
+            IndexData.flipFirstBitInByte(valueBytes, 0);
+            if (!this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+            bout.write(valueBytes);
+        }
+    }
+
+    private static class LegacyFixedPointColumnDescriptor
+    extends ColumnDescriptor {
+        private LegacyFixedPointColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void handleNegationAndOrder(boolean isNegative, byte[] valueBytes) {
+            if (isNegative == this.isAscending()) {
+                IndexData.flipBytes(valueBytes);
+            }
+            valueBytes[0] = isNegative ? 0 : -1;
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            byte[] valueBytes = IndexData.encodeNumberColumnValue(value, this.getColumn());
+            boolean isNegative = (valueBytes[0] & 0x80) != 0;
+            this.handleNegationAndOrder(isNegative, valueBytes);
+            bout.write(valueBytes);
+        }
+
+        /* synthetic */ LegacyFixedPointColumnDescriptor(Column column, byte by, LegacyFixedPointColumnDescriptor legacyFixedPointColumnDescriptor, LegacyFixedPointColumnDescriptor legacyFixedPointColumnDescriptor2) throws IOException {
+            this(column, by);
+        }
+    }
+
+    private static final class NodeEntry
+    extends Entry {
+        private final Integer _subPageNumber;
+
+        private NodeEntry(byte[] entryBytes, RowId rowId, EntryType type, Integer subPageNumber) {
+            super(entryBytes, rowId, type);
+            this._subPageNumber = subPageNumber;
+        }
+
+        private NodeEntry(ByteBuffer buffer, int entryLen) throws IOException {
+            super(buffer, entryLen, 4);
+            this._subPageNumber = ByteUtil.getInt(buffer, ENTRY_BYTE_ORDER);
+        }
+
+        public Integer getSubPageNumber() {
+            return this._subPageNumber;
+        }
+
+        public boolean isLeafEntry() {
+            return false;
+        }
+
+        protected int size() {
+            return super.size() + 4;
+        }
+
+        protected void write(ByteBuffer buffer, byte[] prefix) throws IOException {
+            super.write(buffer, prefix);
+            ByteUtil.putInt(buffer, this._subPageNumber, ENTRY_BYTE_ORDER);
+        }
+
+        public boolean equals(Object o) {
+            return this == o || o != null && this.getClass() == o.getClass() && this.compareTo((Entry)o) == 0 && this.getSubPageNumber().equals(((Entry)o).getSubPageNumber());
+        }
+
+        public String toString() {
+            return "Node RowId = " + this.getRowId() + ", SubPage = " + this._subPageNumber + this.entryBytesToString() + "\n";
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private static final class Position
+    implements Comparable<Position> {
+        private final DataPage _dataPage;
+        private final int _idx;
+        private final Entry _entry;
+        private final boolean _between;
+
+        private Position(DataPage dataPage, int idx) {
+            this(dataPage, idx, dataPage.getEntries().get(idx), false);
+        }
+
+        private Position(DataPage dataPage, int idx, Entry entry, boolean between) {
+            this._dataPage = dataPage;
+            this._idx = idx;
+            this._entry = entry;
+            this._between = between;
+        }
+
+        public DataPage getDataPage() {
+            return this._dataPage;
+        }
+
+        public int getIndex() {
+            return this._idx;
+        }
+
+        public int getNextIndex() {
+            return this._between ? this._idx : this._idx + 1;
+        }
+
+        public int getPrevIndex() {
+            return this._idx - 1;
+        }
+
+        public Entry getEntry() {
+            return this._entry;
+        }
+
+        public boolean isBetween() {
+            return this._between;
+        }
+
+        public boolean equalsEntry(Entry entry) {
+            return this._entry.equals(entry);
+        }
+
+        @Override
+        public int compareTo(Position other) {
+            if (this == other) {
+                return 0;
+            }
+            if (this._dataPage.equals(other._dataPage)) {
+                int idxCmp;
+                int n = this._idx < other._idx ? -1 : (this._idx > other._idx ? 1 : (this._between == other._between ? 0 : (idxCmp = this._between ? -1 : 1)));
+                if (idxCmp != 0) {
+                    return idxCmp;
+                }
+            }
+            return this._entry.compareTo(other._entry);
+        }
+
+        public int hashCode() {
+            return this._entry.hashCode();
+        }
+
+        public boolean equals(Object o) {
+            return this == o || o != null && this.getClass() == o.getClass() && this.compareTo((Position)o) == 0;
+        }
+
+        public String toString() {
+            return "Page = " + this._dataPage.getPageNumber() + ", Idx = " + this._idx + ", Entry = " + this._entry + ", Between = " + this._between;
+        }
+    }
+
+    private static final class ReadOnlyColumnDescriptor
+    extends ColumnDescriptor {
+        private ReadOnlyColumnDescriptor(Column column, byte flags) throws IOException {
+            super(column, flags);
+        }
+
+        protected void writeNonNullValue(Object value, ByteUtil.ByteStream bout) throws IOException {
+            throw new UnsupportedOperationException("should not be called");
+        }
+    }
+}
+

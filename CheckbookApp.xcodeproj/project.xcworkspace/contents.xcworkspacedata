@@ -5,21 +5,12 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:LocalDatabaseManager.swift">
+      location = "group:CheckbookApp.entitlements">
    </FileRef>
    <FileRef
-      location = "group:LocalModels.swift">
+      location = "group:CheckbookApp 2.entitlements">
    </FileRef>
    <FileRef
-      location = "group:NewTransactionView.swift">
-   </FileRef>
-   <FileRef
-      location = "group:AccountBalanceService.swift">
-   </FileRef>
-   <FileRef
-      location = "group:PHASE_1_IMPLEMENTATION.md">
-   </FileRef>
-   <FileRef
-      location = "group:QUICK_START_PHASE_1.md">
+      location = "group:Info.plist">
    </FileRef>
 </Workspace>

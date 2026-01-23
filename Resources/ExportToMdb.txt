@@ -1,0 +1,366 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.le.sunriise;
+
+import com.healthmarketscience.jackcess.CodecProvider;
+import com.healthmarketscience.jackcess.Column;
+import com.healthmarketscience.jackcess.CryptCodecProvider;
+import com.healthmarketscience.jackcess.Cursor;
+import com.healthmarketscience.jackcess.DataType;
+import com.healthmarketscience.jackcess.Database;
+import com.healthmarketscience.jackcess.Table;
+import com.le.sunriise.StopWatch;
+import com.le.sunriise.Utils;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+import org.apache.log4j.Logger;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public class ExportToMdb {
+    private static final Logger log = Logger.getLogger(ExportToMdb.class);
+    private static String EMPTY_FILE = "empty-db.mdb";
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     */
+    public static void main(String[] args) {
+        File srcFile = null;
+        String srcPassword = null;
+        File destFile = null;
+        if (args.length == 2) {
+            srcFile = new File(args[0]);
+            destFile = new File(args[1]);
+        } else if (args.length == 3) {
+            srcFile = new File(args[0]);
+            srcPassword = args[1];
+            destFile = new File(args[2]);
+        } else {
+            Class<ExportToMdb> clz = ExportToMdb.class;
+            System.out.println("Usage: java " + clz.getName() + " in.mny [password] out.mdb");
+            System.exit(1);
+        }
+        ExportToMdb exporter = new ExportToMdb();
+        try {
+            log.info("srcFile=" + srcFile);
+            exporter.export(srcFile, srcPassword, destFile);
+        }
+        catch (IOException e) {
+            log.error(e, e);
+        }
+        finally {
+            log.info("destFile=" + destFile.getAbsolutePath());
+            log.info("< DONE");
+        }
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     * Enabled aggressive block sorting
+     * Enabled unnecessary exception pruning
+     * Enabled aggressive exception aggregation
+     */
+    public void export(File srcFile, String srcPassword, File destFile) throws IOException {
+        Database srcDb = null;
+        Database destDb = null;
+        try {
+            srcDb = Utils.openDbReadOnly(srcFile, srcPassword);
+            destDb = this.export(srcDb, destFile);
+            return;
+        }
+        finally {
+            if (srcDb != null) {
+                try {
+                    try {
+                        srcDb.close();
+                        srcDb = null;
+                    }
+                    catch (IOException e) {
+                        log.warn(e);
+                        srcDb = null;
+                    }
+                }
+                catch (Throwable throwable) {
+                    srcDb = null;
+                    throw throwable;
+                }
+            }
+            if (destDb != null) {
+                try {
+                    try {
+                        destDb.close();
+                        destDb = null;
+                    }
+                    catch (IOException e) {
+                        log.warn(e);
+                        destDb = null;
+                    }
+                }
+                catch (Throwable throwable) {
+                    destDb = null;
+                    throw throwable;
+                }
+            }
+        }
+    }
+
+    public Database export(Database srcDb, File destFile) throws IOException {
+        Database destDb = ExportToMdb.createEmptyDb(destFile);
+        this.copyDb(srcDb, destDb);
+        return destDb;
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     */
+    private void copyDb(Database srcDb, Database destDb) throws IOException {
+        Set<String> tableNames = srcDb.getTableNames();
+        int tableCount = tableNames.size();
+        int addedCount = 0;
+        this.startCopyTables(tableCount);
+        try {
+            for (String tableName : tableNames) {
+                Table table = srcDb.getTable(tableName);
+                if (!this.copyTable(table, destDb)) {
+                    break;
+                }
+                ++addedCount;
+            }
+        }
+        finally {
+            this.endCopyTables(addedCount);
+        }
+    }
+
+    protected void startCopyTables(int maxCount) {
+        log.info("> Adding tables=" + maxCount);
+    }
+
+    protected void endCopyTables(int count) {
+        log.info("< Added tables=" + count);
+    }
+
+    protected boolean startCopyTable(String name) {
+        log.info("> startCopyTable, name=" + name);
+        return true;
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     */
+    private boolean copyTable(Table srcTable, Database destDb) throws IOException {
+        block15: {
+            if (!this.startCopyTable(srcTable.getName())) {
+                return false;
+            }
+            try {
+                String tableName = srcTable.getName();
+                Table destTable = destDb.getTable(tableName);
+                if (destTable != null) {
+                    log.warn("tableName=" + tableName + " exists.");
+                    break block15;
+                }
+                try {
+                    List<Column> columns = srcTable.getColumns();
+                    Database db = destDb;
+                    boolean useExistingTable = false;
+                    ExportToMdb.importColumns(columns, db, tableName, useExistingTable);
+                    destTable = destDb.getTable(tableName);
+                }
+                catch (SQLException e) {
+                    throw new IOException(e);
+                }
+                int batchSize = 200;
+                ArrayList<Object[]> rows = new ArrayList<Object[]>(batchSize);
+                StopWatch stopWatch = new StopWatch();
+                int rowCount = srcTable.getRowCount();
+                if (!this.startAddingRows(rowCount)) {
+                    boolean bl = false;
+                    return bl;
+                }
+                Cursor cursor = null;
+                int count = 0;
+                try {
+                    cursor = Cursor.createCursor(srcTable);
+                    while (cursor.moveToNextRow()) {
+                        Map<String, Object> row = cursor.getCurrentRow();
+                        rows.add(row.values().toArray());
+                        if (rows.size() < batchSize) continue;
+                        destTable.addRows(rows);
+                        rows.clear();
+                        if (this.addedRow(count += rows.size())) continue;
+                        break;
+                    }
+                    if (rows.size() > 0) {
+                        destTable.addRows(rows);
+                        this.addedRow(count += rows.size());
+                        rows.clear();
+                    }
+                }
+                finally {
+                    long delta = stopWatch.click();
+                    if (cursor != null) {
+                        cursor = null;
+                    }
+                    this.endAddingRows(count, delta);
+                }
+            }
+            finally {
+                this.endCopyTable(srcTable.getName());
+            }
+        }
+        return true;
+    }
+
+    protected boolean addedRow(int count) {
+        return true;
+    }
+
+    protected void endCopyTable(String name) {
+        log.info("< endCopyTable, name=" + name);
+    }
+
+    protected boolean startAddingRows(int max) {
+        log.info("Adding rows=" + max + " ...");
+        return true;
+    }
+
+    protected void endAddingRows(int count, long delta) {
+        log.info("Added rows=" + count + ", ms=" + delta);
+    }
+
+    private static Database createEmptyDb(InputStream emptyDbTemplateStream, File destFile) throws IOException {
+        ExportToMdb.copyStreamToFile(emptyDbTemplateStream, destFile);
+        boolean readOnly = false;
+        boolean autoSync = true;
+        Charset charset = null;
+        TimeZone timeZone = null;
+        CodecProvider provider = null;
+        Database db = Database.open(destFile, readOnly, autoSync, charset, timeZone, provider);
+        return db;
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     */
+    private static Database createEmptyDb(File file) throws IOException {
+        Database db = null;
+        InputStream in = null;
+        try {
+            String resource = EMPTY_FILE;
+            in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);
+            if (in == null) {
+                throw new IOException("Cannot find resource=" + resource);
+            }
+            in = new BufferedInputStream(in);
+            db = ExportToMdb.createEmptyDb(in, file);
+        }
+        finally {
+            if (in != null) {
+                try {
+                    in.close();
+                }
+                catch (IOException e) {
+                    log.warn(e);
+                }
+                finally {
+                    in = null;
+                }
+            }
+        }
+        return db;
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
+     */
+    private static void copyStreamToFile(InputStream srcIn, File destFile) throws FileNotFoundException, IOException {
+        OutputStream out = null;
+        try {
+            out = new BufferedOutputStream(new FileOutputStream(destFile));
+            ExportToMdb.copyStream(srcIn, out);
+        }
+        finally {
+            if (out != null) {
+                try {
+                    out.close();
+                }
+                catch (IOException e) {
+                    log.warn(e);
+                }
+                finally {
+                    out = null;
+                }
+            }
+        }
+    }
+
+    private static void copyStream(InputStream in, OutputStream out) throws IOException {
+        int bufSize = 1024;
+        byte[] buffer = new byte[bufSize];
+        int n = 0;
+        while ((n = in.read(buffer, 0, bufSize)) != -1) {
+            out.write(buffer, 0, n);
+        }
+    }
+
+    private Database openSrcDbX(File mdbFile, String password) throws IOException {
+        Database db = null;
+        boolean readOnly = true;
+        boolean autoSync = true;
+        Charset charset = null;
+        TimeZone timeZone = null;
+        CryptCodecProvider provider = null;
+        provider = password != null ? new CryptCodecProvider(password) : new CryptCodecProvider();
+        db = Database.open(mdbFile, readOnly, autoSync, charset, timeZone, provider);
+        return db;
+    }
+
+    private static void importColumns(List<Column> srcColumns, Database db, String tableName, boolean useExistingTable) throws SQLException, IOException {
+        tableName = Database.escapeIdentifier(tableName);
+        Table table = null;
+        if (!useExistingTable || (table = db.getTable(tableName)) == null) {
+            LinkedList<Column> columns = new LinkedList<Column>();
+            for (int i = 0; i < srcColumns.size(); ++i) {
+                Column srcColumn = srcColumns.get(i);
+                Column column = new Column();
+                column.setName(Database.escapeIdentifier(srcColumn.getName()));
+                short lengthInUnits = srcColumn.getLengthInUnits();
+                column.setType(srcColumn.getType());
+                DataType type = column.getType();
+                if (type.isTrueVariableLength() && !type.isLongValue()) {
+                    column.setLengthInUnits(lengthInUnits);
+                }
+                if (type.getHasScalePrecision()) {
+                    byte scale = srcColumn.getScale();
+                    byte precision = srcColumn.getPrecision();
+                    if (type.isValidScale(scale)) {
+                        column.setScale(scale);
+                    }
+                    if (type.isValidPrecision(precision)) {
+                        column.setPrecision(precision);
+                    }
+                }
+                columns.add(column);
+            }
+            db.createTable(tableName, columns);
+        }
+    }
+}
+

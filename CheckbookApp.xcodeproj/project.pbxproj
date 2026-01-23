@@ -11,6 +11,8 @@
 		DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = DC1C370F2EBC475E008C25B2 /* MSAL */; };
 		DC4E48EF2F19920300B37BF9 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */; };
 		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
+		DCF240682F2330A300F45C2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DCF2405E2F2330A300F45C2E /* Assets.xcassets */; };
+		DCF240882F2330A300F45C2E /* CheckbookAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */; };
 		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
 /* End PBXBuildFile section */
 
@@ -50,6 +52,10 @@
 		DC0896262F1204A80014FCCC /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		DC59B70C2EB576080090E338 /* CheckbookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheckbookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBB415E2F0C707300740D66 /* libmdbtools_c.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libmdbtools_c.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCF2405E2F2330A300F45C2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DCF240602F2330A300F45C2E /* CheckbookApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CheckbookApp-Bridging-Header.h"; sourceTree = "<group>"; };
+		DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckbookAppApp.swift; sourceTree = "<group>"; };
+		DCF240622F2330A300F45C2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -103,14 +109,73 @@
 			);
 			target = DCBB415D2F0C707300740D66 /* mdbtools_c */;
 		};
-		DC84CADA2EB57BD4001D5CD4 /* Exceptions for "CheckbookApp" folder in "CheckbookApp" target */ = {
+		DCF2411F2F23312500F45C2E /* Exceptions for "Documentation" folder in "CheckbookApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				PHASE_1_IMPLEMENTATION.md,
+				README.md,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DCF241202F23312500F45C2E /* Exceptions for "Models" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				MoneyModels.swift,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DCF241212F23312500F45C2E /* Exceptions for "Parsers" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Jet4Decrypter.swift,
+				JetDatabaseReader.swift,
+				MoneyFileParser.swift,
+				MoneyMDB.swift,
+				MSISAMTableReader.swift,
+				SimpleMDBParser.swift,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DCF241222F23312500F45C2E /* Exceptions for "Views" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AccountsView.swift,
+				FolderBrowserView.swift,
+				MainCheckbookView.swift,
+				NewTransactionView.swift,
+				SplashScreenView.swift,
+				TransactionsView.swift,
+				ViewControllerResolver.swift,
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DCF241292F24042700F45C2E /* Exceptions for "Resources" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Database.txt,
+				ExportToMdb.txt,
+				ImportUtil.txt,
+				Index.txt,
+				IndexData.txt,
+				Insert.txt,
+				MnyTableModel.txt,
+				money_insert.py,
+				NewRowDialog.txt,
+				"Table 1.txt",
 			);
 			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		DCF241242F2333C000F45C2E /* Exceptions for "CheckbookApp" folder in "Compile Sources" phase from "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = DC59B7082EB576080090E338 /* Sources */;
+			membershipExceptions = (
+				CheckbookApp.entitlements,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DC1C36F82EBC410B008C25B2 /* MSAL */ = {
@@ -121,7 +186,7 @@
 		DC59B70E2EB576080090E338 /* CheckbookApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				DC84CADA2EB57BD4001D5CD4 /* Exceptions for "CheckbookApp" folder in "CheckbookApp" target */,
+				DCF241242F2333C000F45C2E /* Exceptions for "CheckbookApp" folder in "Compile Sources" phase from "CheckbookApp" target */,
 			);
 			path = CheckbookApp;
 			sourceTree = "<group>";
@@ -133,6 +198,56 @@
 				DC0896042F11F01C0014FCCC /* Exceptions for "mdbtools_c" folder in "mdbtools_c" target */,
 			);
 			path = mdbtools_c;
+			sourceTree = "<group>";
+		};
+		DCF240D52F2330AD00F45C2E /* Authentication */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Authentication;
+			sourceTree = "<group>";
+		};
+		DCF240DA2F23312500F45C2E /* Documentation */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF2411F2F23312500F45C2E /* Exceptions for "Documentation" folder in "CheckbookApp" target */,
+			);
+			path = Documentation;
+			sourceTree = "<group>";
+		};
+		DCF240DC2F23312500F45C2E /* Models */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF241202F23312500F45C2E /* Exceptions for "Models" folder in "CheckbookApp" target */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DCF240E32F23312500F45C2E /* Parsers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF241212F23312500F45C2E /* Exceptions for "Parsers" folder in "CheckbookApp" target */,
+			);
+			path = Parsers;
+			sourceTree = "<group>";
+		};
+		DCF240F22F23312500F45C2E /* Services */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		DCF240FD2F23312500F45C2E /* Views */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF241222F23312500F45C2E /* Exceptions for "Views" folder in "CheckbookApp" target */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DCF241272F24040300F45C2E /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF241292F24042700F45C2E /* Exceptions for "Resources" folder in "CheckbookApp" target */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -169,12 +284,23 @@
 		DC59B7032EB576080090E338 = {
 			isa = PBXGroup;
 			children = (
+				DCF241272F24040300F45C2E /* Resources */,
 				DC59B70E2EB576080090E338 /* CheckbookApp */,
 				DC1C36F82EBC410B008C25B2 /* MSAL */,
 				DCBB415F2F0C707300740D66 /* mdbtools_c */,
 				DC1C37082EBC43E4008C25B2 /* Frameworks */,
 				DC59B70D2EB576080090E338 /* Products */,
 				DC0896262F1204A80014FCCC /* .gitignore */,
+				DCF240D52F2330AD00F45C2E /* Authentication */,
+				DCF240DA2F23312500F45C2E /* Documentation */,
+				DCF240DC2F23312500F45C2E /* Models */,
+				DCF240E32F23312500F45C2E /* Parsers */,
+				DCF240F22F23312500F45C2E /* Services */,
+				DCF240FD2F23312500F45C2E /* Views */,
+				DCF2405E2F2330A300F45C2E /* Assets.xcassets */,
+				DCF240602F2330A300F45C2E /* CheckbookApp-Bridging-Header.h */,
+				DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */,
+				DCF240622F2330A300F45C2E /* Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -208,6 +334,9 @@
 			);
 			fileSystemSynchronizedGroups = (
 				DC59B70E2EB576080090E338 /* CheckbookApp */,
+				DCF240D52F2330AD00F45C2E /* Authentication */,
+				DCF240F22F23312500F45C2E /* Services */,
+				DCF241272F24040300F45C2E /* Resources */,
 			);
 			name = CheckbookApp;
 			packageProductDependencies = (
@@ -290,6 +419,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCF240682F2330A300F45C2E /* Assets.xcassets in Resources */,
 				DC0896272F1204A80014FCCC /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -301,6 +431,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCF240882F2330A300F45C2E /* CheckbookAppApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,7 +595,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = "";
-				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/CheckbookApp/Info.plist";
+				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -484,7 +615,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/mdbtools_c";
-				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp/CheckbookApp-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -510,7 +641,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = "";
-				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/CheckbookApp/Info.plist";
+				INFOPLIST_FILE = "/Volumes/DockDisk/DevProjects/Money-Sunrise-Checkbook/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -530,7 +661,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/mdbtools_c";
-				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp/CheckbookApp-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "CheckbookApp-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				SYSTEM_HEADER_SEARCH_PATHS = "";

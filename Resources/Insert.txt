@@ -1,0 +1,65 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package net.sf.jsqlparser.statement.insert;
+
+import java.util.List;
+import net.sf.jsqlparser.expression.operators.relational.ItemsList;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.StatementVisitor;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+
+public class Insert
+implements Statement {
+    private Table table;
+    private List columns;
+    private ItemsList itemsList;
+    private boolean useValues = true;
+
+    public void accept(StatementVisitor statementVisitor) {
+        statementVisitor.visit(this);
+    }
+
+    public Table getTable() {
+        return this.table;
+    }
+
+    public void setTable(Table name) {
+        this.table = name;
+    }
+
+    public List getColumns() {
+        return this.columns;
+    }
+
+    public void setColumns(List list) {
+        this.columns = list;
+    }
+
+    public ItemsList getItemsList() {
+        return this.itemsList;
+    }
+
+    public void setItemsList(ItemsList list) {
+        this.itemsList = list;
+    }
+
+    public boolean isUseValues() {
+        return this.useValues;
+    }
+
+    public void setUseValues(boolean useValues) {
+        this.useValues = useValues;
+    }
+
+    public String toString() {
+        String sql = "";
+        sql = "INSERT INTO ";
+        sql = sql + this.table + " ";
+        sql = sql + (this.columns != null ? PlainSelect.getStringList(this.columns, true, true) + " " : "");
+        sql = this.useValues ? sql + "VALUES " + this.itemsList + "" : sql + "" + this.itemsList + "";
+        return sql;
+    }
+}
+

@@ -1,0 +1,272 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.healthmarketscience.jackcess;
+
+import com.healthmarketscience.jackcess.ByteUtil;
+import com.healthmarketscience.jackcess.IndexBuilder;
+import com.healthmarketscience.jackcess.IndexData;
+import com.healthmarketscience.jackcess.JetFormat;
+import com.healthmarketscience.jackcess.PageChannel;
+import com.healthmarketscience.jackcess.RowId;
+import com.healthmarketscience.jackcess.Table;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public class Index
+implements Comparable<Index> {
+    protected static final Log LOG = LogFactory.getLog(Index.class);
+    static final byte PRIMARY_KEY_INDEX_TYPE = 1;
+    static final byte FOREIGN_KEY_INDEX_TYPE = 2;
+    private static final byte CASCADE_UPDATES_FLAG = 1;
+    private static final byte CASCADE_DELETES_FLAG = 1;
+    private static final byte PRIMARY_TABLE_TYPE = 1;
+    private static final int INVALID_INDEX_NUMBER = -1;
+    private final IndexData _data;
+    private final int _indexNumber;
+    private final byte _indexType;
+    private String _name;
+    private final ForeignKeyReference _reference;
+
+    protected Index(ByteBuffer tableBuffer, List<IndexData> indexDatas, JetFormat format) throws IOException {
+        ByteUtil.forward(tableBuffer, format.SKIP_BEFORE_INDEX_SLOT);
+        this._indexNumber = tableBuffer.getInt();
+        int indexDataNumber = tableBuffer.getInt();
+        byte relIndexType = tableBuffer.get();
+        int relIndexNumber = tableBuffer.getInt();
+        int relTablePageNumber = tableBuffer.getInt();
+        byte cascadeUpdatesFlag = tableBuffer.get();
+        byte cascadeDeletesFlag = tableBuffer.get();
+        this._indexType = tableBuffer.get();
+        this._reference = this._indexType == 2 && relIndexNumber != -1 ? new ForeignKeyReference(relIndexType, relIndexNumber, relTablePageNumber, cascadeUpdatesFlag == 1, cascadeDeletesFlag == 1) : null;
+        ByteUtil.forward(tableBuffer, format.SKIP_AFTER_INDEX_SLOT);
+        this._data = indexDatas.get(indexDataNumber);
+        this._data.addIndex(this);
+    }
+
+    public IndexData getIndexData() {
+        return this._data;
+    }
+
+    public Table getTable() {
+        return this.getIndexData().getTable();
+    }
+
+    public JetFormat getFormat() {
+        return this.getTable().getFormat();
+    }
+
+    public PageChannel getPageChannel() {
+        return this.getTable().getPageChannel();
+    }
+
+    public int getIndexNumber() {
+        return this._indexNumber;
+    }
+
+    public byte getIndexFlags() {
+        return this.getIndexData().getIndexFlags();
+    }
+
+    public int getUniqueEntryCount() {
+        return this.getIndexData().getUniqueEntryCount();
+    }
+
+    public int getUniqueEntryCountOffset() {
+        return this.getIndexData().getUniqueEntryCountOffset();
+    }
+
+    public String getName() {
+        return this._name;
+    }
+
+    public void setName(String name) {
+        this._name = name;
+    }
+
+    public boolean isPrimaryKey() {
+        return this._indexType == 1;
+    }
+
+    public boolean isForeignKey() {
+        return this._indexType == 2;
+    }
+
+    public ForeignKeyReference getReference() {
+        return this._reference;
+    }
+
+    public Index getReferencedIndex() throws IOException {
+        if (this._reference == null) {
+            return null;
+        }
+        Table refTable = this.getTable().getDatabase().getTable(this._reference.getOtherTablePageNumber());
+        if (refTable == null) {
+            throw new IOException("Reference to missing table " + this._reference.getOtherTablePageNumber());
+        }
+        Index refIndex = null;
+        int idxNumber = this._reference.getOtherIndexNumber();
+        for (Index idx : refTable.getIndexes()) {
+            if (idx.getIndexNumber() != idxNumber) continue;
+            refIndex = idx;
+            break;
+        }
+        if (refIndex == null) {
+            throw new IOException("Reference to missing index " + idxNumber + " on table " + refTable.getName());
+        }
+        ForeignKeyReference otherRef = refIndex.getReference();
+        if (otherRef == null || otherRef.getOtherTablePageNumber() != this.getTable().getTableDefPageNumber() || otherRef.getOtherIndexNumber() != this._indexNumber) {
+            throw new IOException("Found unexpected index " + refIndex.getName() + " on table " + refTable.getName() + " with reference " + otherRef);
+        }
+        return refIndex;
+    }
+
+    public boolean shouldIgnoreNulls() {
+        return this.getIndexData().shouldIgnoreNulls();
+    }
+
+    public boolean isUnique() {
+        return this.getIndexData().isUnique();
+    }
+
+    public List<IndexData.ColumnDescriptor> getColumns() {
+        return this.getIndexData().getColumns();
+    }
+
+    public boolean isInitialized() {
+        return this.getIndexData().isInitialized();
+    }
+
+    public void initialize() throws IOException {
+        this.getIndexData().initialize();
+    }
+
+    public void update() throws IOException {
+        this.getIndexData().update();
+    }
+
+    public void addRow(Object[] row, RowId rowId) throws IOException {
+        this.getIndexData().addRow(row, rowId);
+    }
+
+    public void deleteRow(Object[] row, RowId rowId) throws IOException {
+        this.getIndexData().deleteRow(row, rowId);
+    }
+
+    public IndexData.EntryCursor cursor() throws IOException {
+        return this.cursor(null, true, null, true);
+    }
+
+    public IndexData.EntryCursor cursor(Object[] startRow, boolean startInclusive, Object[] endRow, boolean endInclusive) throws IOException {
+        return this.getIndexData().cursor(startRow, startInclusive, endRow, endInclusive);
+    }
+
+    public Object[] constructIndexRowFromEntry(Object ... values) {
+        return this.getIndexData().constructIndexRowFromEntry(values);
+    }
+
+    public Object[] constructIndexRow(String colName, Object value) {
+        return this.constructIndexRow(Collections.singletonMap(colName, value));
+    }
+
+    public Object[] constructIndexRow(Map<String, Object> row) {
+        return this.getIndexData().constructIndexRow(row);
+    }
+
+    public String toString() {
+        StringBuilder rtn = new StringBuilder();
+        rtn.append("\tName: (").append(this.getTable().getName()).append(") ").append(this._name);
+        rtn.append("\n\tNumber: ").append(this._indexNumber);
+        rtn.append("\n\tIs Primary Key: ").append(this.isPrimaryKey());
+        rtn.append("\n\tIs Foreign Key: ").append(this.isForeignKey());
+        if (this._reference != null) {
+            rtn.append("\n\tForeignKeyReference: ").append(this._reference);
+        }
+        rtn.append(this._data.toString());
+        rtn.append("\n\n");
+        return rtn.toString();
+    }
+
+    @Override
+    public int compareTo(Index other) {
+        if (this._indexNumber > other.getIndexNumber()) {
+            return 1;
+        }
+        if (this._indexNumber < other.getIndexNumber()) {
+            return -1;
+        }
+        return 0;
+    }
+
+    protected static void writeDefinitions(ByteBuffer buffer, List<IndexBuilder> indexes, Charset charset) throws IOException {
+        for (IndexBuilder idx : indexes) {
+            buffer.putInt(1625);
+            buffer.putInt(idx.getIndexNumber());
+            buffer.putInt(idx.getIndexDataNumber());
+            buffer.put((byte)0);
+            buffer.putInt(-1);
+            buffer.putInt(0);
+            buffer.put((byte)0);
+            buffer.put((byte)0);
+            buffer.put(idx.getType());
+            buffer.putInt(0);
+        }
+        for (IndexBuilder idx : indexes) {
+            Table.writeName(buffer, idx.getName(), charset);
+        }
+    }
+
+    public static class ForeignKeyReference {
+        private final byte _tableType;
+        private final int _otherIndexNumber;
+        private final int _otherTablePageNumber;
+        private final boolean _cascadeUpdates;
+        private final boolean _cascadeDeletes;
+
+        public ForeignKeyReference(byte tableType, int otherIndexNumber, int otherTablePageNumber, boolean cascadeUpdates, boolean cascadeDeletes) {
+            this._tableType = tableType;
+            this._otherIndexNumber = otherIndexNumber;
+            this._otherTablePageNumber = otherTablePageNumber;
+            this._cascadeUpdates = cascadeUpdates;
+            this._cascadeDeletes = cascadeDeletes;
+        }
+
+        public byte getTableType() {
+            return this._tableType;
+        }
+
+        public boolean isPrimaryTable() {
+            return this.getTableType() == 1;
+        }
+
+        public int getOtherIndexNumber() {
+            return this._otherIndexNumber;
+        }
+
+        public int getOtherTablePageNumber() {
+            return this._otherTablePageNumber;
+        }
+
+        public boolean isCascadeUpdates() {
+            return this._cascadeUpdates;
+        }
+
+        public boolean isCascadeDeletes() {
+            return this._cascadeDeletes;
+        }
+
+        public String toString() {
+            return "\n\t\tOther Index Number: " + this._otherIndexNumber + "\n\t\tOther Table Page Num: " + this._otherTablePageNumber + "\n\t\tIs Primary Table: " + this.isPrimaryTable() + "\n\t\tIs Cascade Updates: " + this.isCascadeUpdates() + "\n\t\tIs Cascade Deletes: " + this.isCascadeDeletes();
+        }
+    }
+}
+

@@ -1,0 +1,1341 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package com.healthmarketscience.jackcess;
+
+import com.healthmarketscience.jackcess.ByteUtil;
+import com.healthmarketscience.jackcess.Column;
+import com.healthmarketscience.jackcess.Cursor;
+import com.healthmarketscience.jackcess.DataType;
+import com.healthmarketscience.jackcess.Database;
+import com.healthmarketscience.jackcess.ErrorHandler;
+import com.healthmarketscience.jackcess.Index;
+import com.healthmarketscience.jackcess.IndexBuilder;
+import com.healthmarketscience.jackcess.IndexData;
+import com.healthmarketscience.jackcess.JetFormat;
+import com.healthmarketscience.jackcess.NullMask;
+import com.healthmarketscience.jackcess.PageChannel;
+import com.healthmarketscience.jackcess.PropertyMap;
+import com.healthmarketscience.jackcess.PropertyMaps;
+import com.healthmarketscience.jackcess.RowId;
+import com.healthmarketscience.jackcess.TempBufferHolder;
+import com.healthmarketscience.jackcess.TempPageHolder;
+import com.healthmarketscience.jackcess.UsageMap;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/*
+ * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+ */
+public class Table
+implements Iterable<Map<String, Object>> {
+    private static final Log LOG = LogFactory.getLog(Table.class);
+    private static final short OFFSET_MASK = 8191;
+    private static final short DELETED_ROW_MASK = Short.MIN_VALUE;
+    private static final short OVERFLOW_ROW_MASK = 16384;
+    static final int MAGIC_TABLE_NUMBER = 1625;
+    private static final int MAX_BYTE = 256;
+    public static final byte TYPE_SYSTEM = 83;
+    public static final byte TYPE_USER = 78;
+    private static final Comparator<Column> VAR_LEN_COLUMN_COMPARATOR = new Comparator<Column>(){
+
+        @Override
+        public int compare(Column c1, Column c2) {
+            return c1.getVarLenTableIndex() < c2.getVarLenTableIndex() ? -1 : (c1.getVarLenTableIndex() > c2.getVarLenTableIndex() ? 1 : 0);
+        }
+    };
+    private static final Comparator<Column> DISPLAY_ORDER_COMPARATOR = new Comparator<Column>(){
+
+        @Override
+        public int compare(Column c1, Column c2) {
+            return c1.getDisplayIndex() < c2.getDisplayIndex() ? -1 : (c1.getDisplayIndex() > c2.getDisplayIndex() ? 1 : 0);
+        }
+    };
+    private final Database _database;
+    private int _flags;
+    private byte _tableType;
+    private int _indexCount;
+    private int _logicalIndexCount;
+    private int _rowCount;
+    private int _lastLongAutoNumber;
+    private final int _tableDefPageNumber;
+    private short _maxColumnCount;
+    private short _maxVarColumnCount;
+    private List<Column> _columns = new ArrayList<Column>();
+    private List<Column> _varColumns = new ArrayList<Column>();
+    private List<Index> _indexes = new ArrayList<Index>();
+    private List<IndexData> _indexDatas = new ArrayList<IndexData>();
+    private final String _name;
+    private UsageMap _ownedPages;
+    private UsageMap _freeSpacePages;
+    private int _modCount;
+    private final TempPageHolder _addRowBufferH = TempPageHolder.newHolder(TempBufferHolder.Type.SOFT);
+    private final TempPageHolder _tableDefBufferH = TempPageHolder.newHolder(TempBufferHolder.Type.SOFT);
+    private final TempBufferHolder _singleRowBufferH = TempBufferHolder.newHolder(TempBufferHolder.Type.SOFT, true);
+    private final TempBufferHolder _multiRowBufferH = TempBufferHolder.newHolder(TempBufferHolder.Type.NONE, true);
+    private final TempPageHolder _longValueBufferH = TempPageHolder.newHolder(TempBufferHolder.Type.SOFT);
+    private final boolean _useBigIndex;
+    private ErrorHandler _tableErrorHandler;
+    private PropertyMap _props;
+    private PropertyMaps _propertyMaps;
+    private Cursor _cursor;
+
+    Table(boolean testing, List<Column> columns) throws IOException {
+        if (!testing) {
+            throw new IllegalArgumentException();
+        }
+        this._database = null;
+        this._tableDefPageNumber = -1;
+        this._name = null;
+        this._useBigIndex = true;
+        this.setColumns(columns);
+    }
+
+    protected Table(Database database, ByteBuffer tableBuffer, int pageNumber, String name, int flags, boolean useBigIndex) throws IOException {
+        this._database = database;
+        this._tableDefPageNumber = pageNumber;
+        this._name = name;
+        this._flags = flags;
+        this._useBigIndex = useBigIndex;
+        int nextPage = tableBuffer.getInt(this.getFormat().OFFSET_NEXT_TABLE_DEF_PAGE);
+        ByteBuffer nextPageBuffer = null;
+        while (nextPage != 0) {
+            if (nextPageBuffer == null) {
+                nextPageBuffer = this.getPageChannel().createPageBuffer();
+            }
+            this.getPageChannel().readPage(nextPageBuffer, nextPage);
+            nextPage = nextPageBuffer.getInt(this.getFormat().OFFSET_NEXT_TABLE_DEF_PAGE);
+            ByteBuffer newBuffer = this.getPageChannel().createBuffer(tableBuffer.capacity() + this.getFormat().PAGE_SIZE - 8);
+            newBuffer.put(tableBuffer);
+            newBuffer.put(nextPageBuffer.array(), 8, this.getFormat().PAGE_SIZE - 8);
+            tableBuffer = newBuffer;
+            tableBuffer.flip();
+        }
+        this.readTableDefinition(tableBuffer);
+        tableBuffer = null;
+        this._cursor = Cursor.createCursor(this);
+    }
+
+    public String getName() {
+        return this._name;
+    }
+
+    public boolean isHidden() {
+        return (this._flags & 8) != 0;
+    }
+
+    public boolean doUseBigIndex() {
+        return this._useBigIndex;
+    }
+
+    public int getMaxColumnCount() {
+        return this._maxColumnCount;
+    }
+
+    public int getColumnCount() {
+        return this._columns.size();
+    }
+
+    public Database getDatabase() {
+        return this._database;
+    }
+
+    public JetFormat getFormat() {
+        return this.getDatabase().getFormat();
+    }
+
+    public PageChannel getPageChannel() {
+        return this.getDatabase().getPageChannel();
+    }
+
+    public ErrorHandler getErrorHandler() {
+        return this._tableErrorHandler != null ? this._tableErrorHandler : this.getDatabase().getErrorHandler();
+    }
+
+    public void setErrorHandler(ErrorHandler newErrorHandler) {
+        this._tableErrorHandler = newErrorHandler;
+    }
+
+    protected int getTableDefPageNumber() {
+        return this._tableDefPageNumber;
+    }
+
+    public RowState createRowState() {
+        return new RowState(TempBufferHolder.Type.HARD);
+    }
+
+    protected UsageMap.PageCursor getOwnedPagesCursor() {
+        return this._ownedPages.cursor();
+    }
+
+    protected TempPageHolder getLongValueBuffer() {
+        return this._longValueBufferH;
+    }
+
+    public List<Column> getColumns() {
+        return Collections.unmodifiableList(this._columns);
+    }
+
+    public Column getColumn(String name) {
+        for (Column column : this._columns) {
+            if (!column.getName().equalsIgnoreCase(name)) continue;
+            return column;
+        }
+        throw new IllegalArgumentException("Column with name " + name + " does not exist in this table");
+    }
+
+    private void setColumns(List<Column> columns) {
+        this._columns = columns;
+        int colIdx = 0;
+        int varLenIdx = 0;
+        int fixedOffset = 0;
+        for (Column col : this._columns) {
+            col.setColumnNumber((short)colIdx);
+            col.setColumnIndex(colIdx++);
+            if (col.isVariableLength()) {
+                col.setVarLenTableIndex(varLenIdx++);
+                this._varColumns.add(col);
+                continue;
+            }
+            col.setFixedDataOffset(fixedOffset);
+            fixedOffset += col.getType().getFixedSize();
+        }
+        this._maxColumnCount = (short)this._columns.size();
+        this._maxVarColumnCount = (short)this._varColumns.size();
+    }
+
+    public PropertyMap getProperties() throws IOException {
+        if (this._props == null) {
+            this._props = this.getPropertyMaps().getDefault();
+        }
+        return this._props;
+    }
+
+    protected PropertyMaps getPropertyMaps() throws IOException {
+        if (this._propertyMaps == null) {
+            this._propertyMaps = this.getDatabase().getPropertiesForObject(this._tableDefPageNumber);
+        }
+        return this._propertyMaps;
+    }
+
+    public List<Index> getIndexes() {
+        return Collections.unmodifiableList(this._indexes);
+    }
+
+    public Index getIndex(String name) {
+        for (Index index : this._indexes) {
+            if (!index.getName().equalsIgnoreCase(name)) continue;
+            return index;
+        }
+        throw new IllegalArgumentException("Index with name " + name + " does not exist on this table");
+    }
+
+    List<IndexData> getIndexDatas() {
+        return Collections.unmodifiableList(this._indexDatas);
+    }
+
+    int getLogicalIndexCount() {
+        return this._logicalIndexCount;
+    }
+
+    public void reset() {
+        this._cursor.reset();
+    }
+
+    public void deleteCurrentRow() throws IOException {
+        this._cursor.deleteCurrentRow();
+    }
+
+    public void deleteRow(RowState rowState, RowId rowId) throws IOException {
+        Table.requireValidRowId(rowId);
+        ByteBuffer rowBuffer = Table.positionAtRowHeader(rowState, rowId);
+        Table.requireNonDeletedRow(rowState, rowId);
+        int pageNumber = rowState.getHeaderRowId().getPageNumber();
+        int rowNumber = rowState.getHeaderRowId().getRowNumber();
+        Object[] rowValues = !this._indexDatas.isEmpty() ? rowState.getRowValues() : null;
+        int rowIndex = Table.getRowStartOffset(rowNumber, this.getFormat());
+        rowBuffer.putShort(rowIndex, (short)(rowBuffer.getShort(rowIndex) | Short.MIN_VALUE | 0x4000));
+        this.writeDataPage(rowBuffer, pageNumber);
+        for (IndexData indexData : this._indexDatas) {
+            indexData.deleteRow(rowValues, rowId);
+        }
+        this.updateTableDefinition(-1);
+    }
+
+    public Map<String, Object> getNextRow() throws IOException {
+        return this.getNextRow(null);
+    }
+
+    public Map<String, Object> getNextRow(Collection<String> columnNames) throws IOException {
+        return this._cursor.getNextRow(columnNames);
+    }
+
+    public Object getRowValue(RowState rowState, RowId rowId, Column column) throws IOException {
+        if (this != column.getTable()) {
+            throw new IllegalArgumentException("Given column " + column + " is not from this table");
+        }
+        Table.requireValidRowId(rowId);
+        ByteBuffer rowBuffer = Table.positionAtRowData(rowState, rowId);
+        Table.requireNonDeletedRow(rowState, rowId);
+        return Table.getRowColumn(this.getFormat(), rowBuffer, this.getRowNullMask(rowBuffer), column, rowState);
+    }
+
+    public Map<String, Object> getRow(RowState rowState, RowId rowId, Collection<String> columnNames) throws IOException {
+        Table.requireValidRowId(rowId);
+        ByteBuffer rowBuffer = Table.positionAtRowData(rowState, rowId);
+        Table.requireNonDeletedRow(rowState, rowId);
+        return Table.getRow(this.getFormat(), rowState, rowBuffer, this.getRowNullMask(rowBuffer), this._columns, columnNames);
+    }
+
+    private static Map<String, Object> getRow(JetFormat format, RowState rowState, ByteBuffer rowBuffer, NullMask nullMask, Collection<Column> columns, Collection<String> columnNames) throws IOException {
+        LinkedHashMap<String, Object> rtn = new LinkedHashMap<String, Object>(columns.size());
+        for (Column column : columns) {
+            if (columnNames != null && !columnNames.contains(column.getName())) continue;
+            rtn.put(column.getName(), Table.getRowColumn(format, rowBuffer, nullMask, column, rowState));
+        }
+        return rtn;
+    }
+
+    private static Object getRowColumn(JetFormat format, ByteBuffer rowBuffer, NullMask nullMask, Column column, RowState rowState) throws IOException {
+        byte[] columnData;
+        block8: {
+            columnData = null;
+            try {
+                boolean isNull = nullMask.isNull(column);
+                if (column.getType() == DataType.BOOLEAN) {
+                    return rowState.setRowValue(column.getColumnIndex(), !isNull);
+                }
+                if (!isNull) break block8;
+                return null;
+            }
+            catch (Exception e) {
+                rowState.setRowValue(column.getColumnIndex(), Column.rawDataWrapper(columnData));
+                return rowState.handleRowError(column, columnData, e);
+            }
+        }
+        rowBuffer.reset();
+        int rowStart = rowBuffer.position();
+        int colDataPos = 0;
+        int colDataLen = 0;
+        if (!column.isVariableLength()) {
+            int dataStart = rowStart + format.OFFSET_COLUMN_FIXED_DATA_ROW_OFFSET;
+            colDataPos = dataStart + column.getFixedDataOffset();
+            colDataLen = column.getType().getFixedSize(column.getLength());
+        } else {
+            short varDataEnd;
+            short varDataStart;
+            if (format.SIZE_ROW_VAR_COL_OFFSET == 2) {
+                int varColumnOffsetPos = rowBuffer.limit() - nullMask.byteSize() - 4 - column.getVarLenTableIndex() * 2;
+                varDataStart = rowBuffer.getShort(varColumnOffsetPos);
+                varDataEnd = rowBuffer.getShort(varColumnOffsetPos - 2);
+            } else {
+                short[] varColumnOffsets = Table.readJumpTableVarColOffsets(rowState, rowBuffer, rowStart, nullMask);
+                varDataStart = varColumnOffsets[column.getVarLenTableIndex()];
+                varDataEnd = varColumnOffsets[column.getVarLenTableIndex() + 1];
+            }
+            colDataPos = rowStart + varDataStart;
+            colDataLen = varDataEnd - varDataStart;
+        }
+        columnData = new byte[colDataLen];
+        rowBuffer.position(colDataPos);
+        rowBuffer.get(columnData);
+        return rowState.setRowValue(column.getColumnIndex(), column.read(columnData));
+    }
+
+    static short[] readJumpTableVarColOffsets(RowState rowState, ByteBuffer rowBuffer, int rowStart, NullMask nullMask) {
+        short[] varColOffsets = rowState.getVarColOffsets();
+        if (varColOffsets != null) {
+            return varColOffsets;
+        }
+        int nullMaskSize = nullMask.byteSize();
+        int rowEnd = rowStart + rowBuffer.remaining() - 1;
+        int numVarCols = ByteUtil.getUnsignedByte(rowBuffer, rowEnd - nullMaskSize);
+        varColOffsets = new short[numVarCols + 1];
+        int rowLen = rowEnd - rowStart + 1;
+        int numJumps = (rowLen - 1) / 256;
+        int colOffset = rowEnd - nullMaskSize - numJumps - 1;
+        if ((colOffset - rowStart - numVarCols) / 256 < numJumps) {
+            --numJumps;
+        }
+        int jumpsUsed = 0;
+        int i = 0;
+        while (i < numVarCols + 1) {
+            if (jumpsUsed < numJumps && i == ByteUtil.getUnsignedByte(rowBuffer, rowEnd - nullMaskSize - jumpsUsed - 1)) {
+                ++jumpsUsed;
+            }
+            varColOffsets[i] = (short)(ByteUtil.getUnsignedByte(rowBuffer, colOffset - i) + jumpsUsed * 256);
+            ++i;
+        }
+        rowState.setVarColOffsets(varColOffsets);
+        return varColOffsets;
+    }
+
+    private NullMask getRowNullMask(ByteBuffer rowBuffer) throws IOException {
+        rowBuffer.reset();
+        int columnCount = ByteUtil.getUnsignedVarInt(rowBuffer, this.getFormat().SIZE_ROW_COLUMN_COUNT);
+        NullMask nullMask = new NullMask(columnCount);
+        rowBuffer.position(rowBuffer.limit() - nullMask.byteSize());
+        nullMask.read(rowBuffer);
+        return nullMask;
+    }
+
+    public static ByteBuffer positionAtRowHeader(RowState rowState, RowId rowId) throws IOException {
+        ByteBuffer rowBuffer = rowState.setHeaderRow(rowId);
+        if (rowState.isAtHeaderRow()) {
+            return rowBuffer;
+        }
+        if (!rowState.isValid()) {
+            rowState.setStatus(RowStateStatus.AT_HEADER);
+            return null;
+        }
+        short rowStart = rowBuffer.getShort(Table.getRowStartOffset(rowId.getRowNumber(), rowState.getTable().getFormat()));
+        RowStatus rowStatus = RowStatus.NORMAL;
+        if (Table.isDeletedRow(rowStart)) {
+            rowStatus = RowStatus.DELETED;
+        } else if (Table.isOverflowRow(rowStart)) {
+            rowStatus = RowStatus.OVERFLOW;
+        }
+        rowState.setRowStatus(rowStatus);
+        rowState.setStatus(RowStateStatus.AT_HEADER);
+        return rowBuffer;
+    }
+
+    public static ByteBuffer positionAtRowData(RowState rowState, RowId rowId) throws IOException {
+        short rowEnd;
+        short rowStart;
+        Table.positionAtRowHeader(rowState, rowId);
+        if (!rowState.isValid() || rowState.isDeleted()) {
+            rowState.setStatus(RowStateStatus.AT_FINAL);
+            return null;
+        }
+        ByteBuffer rowBuffer = rowState.getFinalPage();
+        int rowNum = rowState.getFinalRowId().getRowNumber();
+        JetFormat format = rowState.getTable().getFormat();
+        if (rowState.isAtFinalRow()) {
+            return PageChannel.narrowBuffer(rowBuffer, Table.findRowStart(rowBuffer, rowNum, format), Table.findRowEnd(rowBuffer, rowNum, format));
+        }
+        while (true) {
+            rowStart = rowBuffer.getShort(Table.getRowStartOffset(rowNum, format));
+            rowEnd = Table.findRowEnd(rowBuffer, rowNum, format);
+            boolean overflowRow = Table.isOverflowRow(rowStart);
+            rowStart = (short)(rowStart & 0x1FFF);
+            if (!overflowRow) break;
+            if (rowEnd - rowStart < 4) {
+                throw new IOException("invalid overflow row info");
+            }
+            int overflowRowNum = ByteUtil.getUnsignedByte(rowBuffer, rowStart);
+            int overflowPageNum = ByteUtil.get3ByteInt(rowBuffer, rowStart + 1);
+            rowBuffer = rowState.setOverflowRow(new RowId(overflowPageNum, overflowRowNum));
+            rowNum = overflowRowNum;
+        }
+        rowState.setStatus(RowStateStatus.AT_FINAL);
+        return PageChannel.narrowBuffer(rowBuffer, rowStart, rowEnd);
+    }
+
+    @Override
+    public Iterator<Map<String, Object>> iterator() {
+        return this.iterator(null);
+    }
+
+    public Iterator<Map<String, Object>> iterator(Collection<String> columnNames) {
+        this.reset();
+        return this._cursor.iterator(columnNames);
+    }
+
+    public static int writeTableDefinition(List<Column> columns, List<IndexBuilder> indexes, PageChannel pageChannel, JetFormat format, Charset charset) throws IOException {
+        int nameByteLen;
+        int indexCount = 0;
+        int logicalIndexCount = 0;
+        if (!indexes.isEmpty()) {
+            for (IndexBuilder idx : indexes) {
+                idx.setIndexNumber(logicalIndexCount++);
+                idx.setIndexDataNumber(indexCount++);
+            }
+        }
+        int tdefPageNumber = pageChannel.allocateNewPage();
+        int usageMapPageNumber = Table.createUsageMapDefinitionBuffer(indexes, pageChannel, format);
+        int idxDataLen = indexCount * (format.SIZE_INDEX_DEFINITION + format.SIZE_INDEX_COLUMN_BLOCK) + logicalIndexCount * format.SIZE_INDEX_INFO_BLOCK;
+        int totalTableDefSize = format.SIZE_TDEF_HEADER + format.SIZE_COLUMN_DEF_BLOCK * columns.size() + idxDataLen + format.SIZE_TDEF_TRAILER;
+        for (Column col : columns) {
+            nameByteLen = col.getName().length() * 2;
+            totalTableDefSize += nameByteLen + 2;
+        }
+        for (IndexBuilder idx : indexes) {
+            nameByteLen = idx.getName().length() * 2;
+            totalTableDefSize += nameByteLen + 2;
+        }
+        ByteBuffer buffer = pageChannel.createBuffer(Math.max(totalTableDefSize, format.PAGE_SIZE));
+        Table.writeTableDefinitionHeader(buffer, columns, usageMapPageNumber, totalTableDefSize, indexCount, logicalIndexCount, format);
+        if (indexCount > 0) {
+            IndexData.writeRowCountDefinitions(buffer, indexCount, format);
+        }
+        Column.writeDefinitions(buffer, columns, format, charset);
+        if (indexCount > 0) {
+            IndexData.writeDefinitions(buffer, columns, indexes, tdefPageNumber, pageChannel, format);
+            Index.writeDefinitions(buffer, indexes, charset);
+        }
+        buffer.put((byte)-1);
+        buffer.put((byte)-1);
+        if (totalTableDefSize <= format.PAGE_SIZE) {
+            buffer.putShort(format.OFFSET_FREE_SPACE, (short)(buffer.remaining() - 8));
+            pageChannel.writePage(buffer, tdefPageNumber);
+        } else {
+            ByteBuffer partialTdef = pageChannel.createPageBuffer();
+            buffer.rewind();
+            int nextTdefPageNumber = -1;
+            while (buffer.hasRemaining()) {
+                partialTdef.clear();
+                if (nextTdefPageNumber == -1) {
+                    nextTdefPageNumber = tdefPageNumber;
+                } else {
+                    Table.writeTablePageHeader(partialTdef);
+                }
+                int curTdefPageNumber = nextTdefPageNumber;
+                int writeLen = Math.min(partialTdef.remaining(), buffer.remaining());
+                partialTdef.put(buffer.array(), buffer.position(), writeLen);
+                ByteUtil.forward(buffer, writeLen);
+                if (buffer.hasRemaining()) {
+                    nextTdefPageNumber = pageChannel.allocateNewPage();
+                    partialTdef.putInt(format.OFFSET_NEXT_TABLE_DEF_PAGE, nextTdefPageNumber);
+                }
+                partialTdef.putShort(format.OFFSET_FREE_SPACE, (short)(partialTdef.remaining() - 8));
+                pageChannel.writePage(partialTdef, curTdefPageNumber);
+            }
+        }
+        return tdefPageNumber;
+    }
+
+    private static void writeTableDefinitionHeader(ByteBuffer buffer, List<Column> columns, int usageMapPageNumber, int totalTableDefSize, int indexCount, int logicalIndexCount, JetFormat format) throws IOException {
+        Table.writeTablePageHeader(buffer);
+        buffer.putInt(totalTableDefSize);
+        buffer.putInt(1625);
+        buffer.putInt(0);
+        buffer.putInt(0);
+        buffer.put((byte)1);
+        int i = 0;
+        while (i < 15) {
+            buffer.put((byte)0);
+            ++i;
+        }
+        buffer.put((byte)78);
+        buffer.putShort((short)columns.size());
+        buffer.putShort(Column.countVariableLength(columns));
+        buffer.putShort((short)columns.size());
+        buffer.putInt(logicalIndexCount);
+        buffer.putInt(indexCount);
+        buffer.put((byte)0);
+        ByteUtil.put3ByteInt(buffer, usageMapPageNumber);
+        buffer.put((byte)1);
+        ByteUtil.put3ByteInt(buffer, usageMapPageNumber);
+        if (LOG.isDebugEnabled()) {
+            int position = buffer.position();
+            buffer.rewind();
+            LOG.debug("Creating new table def block:\n" + ByteUtil.toHexString(buffer, format.SIZE_TDEF_HEADER));
+            buffer.position(position);
+        }
+    }
+
+    private static void writeTablePageHeader(ByteBuffer buffer) {
+        buffer.put((byte)2);
+        buffer.put((byte)1);
+        buffer.put((byte)0);
+        buffer.put((byte)0);
+        buffer.putInt(0);
+    }
+
+    static void writeName(ByteBuffer buffer, String name, Charset charset) {
+        ByteBuffer encName = Column.encodeUncompressedText(name, charset);
+        buffer.putShort((short)encName.remaining());
+        buffer.put(encName);
+    }
+
+    private static int createUsageMapDefinitionBuffer(List<IndexBuilder> indexes, PageChannel pageChannel, JetFormat format) throws IOException {
+        int usageMapRowLength;
+        int umapNum = 2 + indexes.size();
+        int freeSpace = format.DATA_PAGE_INITIAL_FREE_SPACE - umapNum * Table.getRowSpaceUsage(usageMapRowLength = format.OFFSET_USAGE_MAP_START + format.USAGE_MAP_TABLE_BYTE_LENGTH, format);
+        if (freeSpace < 0) {
+            throw new IOException("FIXME attempting to write too many indexes");
+        }
+        int umapPageNumber = pageChannel.allocateNewPage();
+        ByteBuffer rtn = pageChannel.createPageBuffer();
+        rtn.put((byte)1);
+        rtn.put((byte)1);
+        rtn.putShort((short)freeSpace);
+        rtn.putInt(0);
+        rtn.putInt(0);
+        rtn.putShort((short)2);
+        int rowStart = Table.findRowEnd(rtn, 0, format) - usageMapRowLength;
+        int i = 0;
+        while (i < 2) {
+            rtn.putShort(Table.getRowStartOffset(i, format), (short)rowStart);
+            if (i == 0) {
+                rtn.put(rowStart, (byte)1);
+            } else {
+                rtn.put(rowStart, (byte)0);
+            }
+            rowStart -= usageMapRowLength;
+            ++i;
+        }
+        if (!indexes.isEmpty()) {
+            i = 0;
+            while (i < indexes.size()) {
+                IndexBuilder idx = indexes.get(i);
+                int rootPageNumber = pageChannel.allocateNewPage();
+                int umapRowNum = i + 2;
+                idx.setRootPageNumber(rootPageNumber);
+                idx.setUmapRowNumber((byte)umapRowNum);
+                idx.setUmapPageNumber(umapPageNumber);
+                rtn.putShort(Table.getRowStartOffset(umapRowNum, format), (short)rowStart);
+                rtn.put(rowStart, (byte)0);
+                rtn.putInt(rowStart + 1, rootPageNumber);
+                rtn.put(rowStart + 5, (byte)1);
+                rowStart -= usageMapRowLength;
+                ++i;
+            }
+        }
+        pageChannel.writePage(rtn, umapPageNumber);
+        return umapPageNumber;
+    }
+
+    private void readTableDefinition(ByteBuffer tableBuffer) throws IOException {
+        Column column;
+        if (LOG.isDebugEnabled()) {
+            tableBuffer.rewind();
+            LOG.debug("Table def block:\n" + ByteUtil.toHexString(tableBuffer, this.getFormat().SIZE_TDEF_HEADER));
+        }
+        this._rowCount = tableBuffer.getInt(this.getFormat().OFFSET_NUM_ROWS);
+        this._lastLongAutoNumber = tableBuffer.getInt(this.getFormat().OFFSET_NEXT_AUTO_NUMBER);
+        this._tableType = tableBuffer.get(this.getFormat().OFFSET_TABLE_TYPE);
+        this._maxColumnCount = tableBuffer.getShort(this.getFormat().OFFSET_MAX_COLS);
+        this._maxVarColumnCount = tableBuffer.getShort(this.getFormat().OFFSET_NUM_VAR_COLS);
+        int columnCount = tableBuffer.getShort(this.getFormat().OFFSET_NUM_COLS);
+        this._logicalIndexCount = tableBuffer.getInt(this.getFormat().OFFSET_NUM_INDEX_SLOTS);
+        this._indexCount = tableBuffer.getInt(this.getFormat().OFFSET_NUM_INDEXES);
+        int rowNum = ByteUtil.getUnsignedByte(tableBuffer, this.getFormat().OFFSET_OWNED_PAGES);
+        int pageNum = ByteUtil.get3ByteInt(tableBuffer, this.getFormat().OFFSET_OWNED_PAGES + 1);
+        this._ownedPages = UsageMap.read(this.getDatabase(), pageNum, rowNum, false);
+        rowNum = ByteUtil.getUnsignedByte(tableBuffer, this.getFormat().OFFSET_FREE_SPACE_PAGES);
+        pageNum = ByteUtil.get3ByteInt(tableBuffer, this.getFormat().OFFSET_FREE_SPACE_PAGES + 1);
+        this._freeSpacePages = UsageMap.read(this.getDatabase(), pageNum, rowNum, false);
+        int i = 0;
+        while (i < this._indexCount) {
+            this._indexDatas.add(IndexData.create(this, tableBuffer, i, this.getFormat()));
+            ++i;
+        }
+        int colOffset = this.getFormat().OFFSET_INDEX_DEF_BLOCK + this._indexCount * this.getFormat().SIZE_INDEX_DEFINITION;
+        int dispIndex = 0;
+        int i2 = 0;
+        while (i2 < columnCount) {
+            column = new Column(this, tableBuffer, colOffset + i2 * this.getFormat().SIZE_COLUMN_HEADER, dispIndex++);
+            this._columns.add(column);
+            if (column.isVariableLength()) {
+                this._varColumns.add(column);
+            }
+            ++i2;
+        }
+        tableBuffer.position(colOffset + columnCount * this.getFormat().SIZE_COLUMN_HEADER);
+        i2 = 0;
+        while (i2 < columnCount) {
+            column = this._columns.get(i2);
+            column.setName(this.readName(tableBuffer));
+            ++i2;
+        }
+        Collections.sort(this._columns);
+        int colIdx = 0;
+        for (Column col : this._columns) {
+            col.setColumnIndex(colIdx++);
+        }
+        Collections.sort(this._varColumns, VAR_LEN_COLUMN_COMPARATOR);
+        int i3 = 0;
+        while (i3 < this._indexCount) {
+            this._indexDatas.get(i3).read(tableBuffer, this._columns);
+            ++i3;
+        }
+        i3 = 0;
+        while (i3 < this._logicalIndexCount) {
+            this._indexes.add(new Index(tableBuffer, this._indexDatas, this.getFormat()));
+            ++i3;
+        }
+        i3 = 0;
+        while (i3 < this._logicalIndexCount) {
+            this._indexes.get(i3).setName(this.readName(tableBuffer));
+            ++i3;
+        }
+        Collections.sort(this._indexes);
+        if (this.getDatabase().getColumnOrder() != ColumnOrder.DATA) {
+            Collections.sort(this._columns, DISPLAY_ORDER_COMPARATOR);
+        }
+    }
+
+    private void writeDataPage(ByteBuffer pageBuffer, int pageNumber) throws IOException {
+        this.getPageChannel().writePage(pageBuffer, pageNumber);
+        this._addRowBufferH.possiblyInvalidate(pageNumber, pageBuffer);
+        ++this._modCount;
+    }
+
+    private String readName(ByteBuffer buffer) {
+        int nameLength = this.readNameLength(buffer);
+        byte[] nameBytes = new byte[nameLength];
+        buffer.get(nameBytes);
+        return Column.decodeUncompressedText(nameBytes, this.getDatabase().getCharset());
+    }
+
+    private int readNameLength(ByteBuffer buffer) {
+        return ByteUtil.getUnsignedVarInt(buffer, this.getFormat().SIZE_NAME_LENGTH);
+    }
+
+    public Object[] asRow(Map<String, Object> rowMap) {
+        return this.asRow(rowMap, null);
+    }
+
+    public Object[] asUpdateRow(Map<String, Object> rowMap) {
+        return this.asRow(rowMap, Column.KEEP_VALUE);
+    }
+
+    private Object[] asRow(Map<String, Object> rowMap, Object defaultValue) {
+        Object[] row = new Object[this._columns.size()];
+        if (defaultValue != null) {
+            Arrays.fill(row, defaultValue);
+        }
+        if (rowMap == null) {
+            return row;
+        }
+        for (Column col : this._columns) {
+            if (!rowMap.containsKey(col.getName())) continue;
+            row[col.getColumnIndex()] = rowMap.get(col.getName());
+        }
+        return row;
+    }
+
+    public void addRow(Object ... row) throws IOException {
+        this.addRows(Collections.singletonList(row), this._singleRowBufferH);
+    }
+
+    public void addRows(List<? extends Object[]> rows) throws IOException {
+        this.addRows(rows, this._multiRowBufferH);
+    }
+
+    private void addRows(List<? extends Object[]> inRows, TempBufferHolder writeRowBufferH) throws IOException {
+        if (inRows.isEmpty()) {
+            return;
+        }
+        ArrayList<? extends Object[]> rows = new ArrayList<Object[]>(inRows);
+        ByteBuffer[] rowData = new ByteBuffer[rows.size()];
+        int i = 0;
+        while (i < rows.size()) {
+            Object[] row = (Object[])rows.get(i);
+            if (row.length < this._columns.size()) {
+                row = Table.dupeRow(row, this._columns.size());
+                rows.set(i, (Object[])row);
+            }
+            rowData[i] = this.createRow(row, this.getFormat().MAX_ROW_SIZE, writeRowBufferH.getPageBuffer(this.getPageChannel()), false, 0);
+            if (rowData[i].limit() > this.getFormat().MAX_ROW_SIZE) {
+                throw new IOException("Row size " + rowData[i].limit() + " is too large");
+            }
+            ++i;
+        }
+        ByteBuffer dataPage = null;
+        int pageNumber = -1;
+        int i2 = 0;
+        while (i2 < rowData.length) {
+            int rowSize = rowData[i2].remaining();
+            dataPage = this.findFreeRowSpace(rowSize, dataPage, pageNumber);
+            pageNumber = this._addRowBufferH.getPageNumber();
+            int rowNum = Table.addDataPageRow(dataPage, rowSize, this.getFormat(), 0);
+            dataPage.put(rowData[i2]);
+            RowId rowId = new RowId(pageNumber, rowNum);
+            for (IndexData indexData : this._indexDatas) {
+                indexData.addRow((Object[])rows.get(i2), rowId);
+            }
+            ++i2;
+        }
+        this.writeDataPage(dataPage, pageNumber);
+        this.updateTableDefinition(rows.size());
+    }
+
+    public void updateCurrentRow(Object ... row) throws IOException {
+        this._cursor.updateCurrentRow(row);
+    }
+
+    public void updateRow(RowState rowState, RowId rowId, Object ... row) throws IOException {
+        Table.requireValidRowId(rowId);
+        ByteBuffer rowBuffer = Table.positionAtRowData(rowState, rowId);
+        int oldRowSize = rowBuffer.remaining();
+        Table.requireNonDeletedRow(rowState, rowId);
+        if (row.length < this._columns.size()) {
+            row = Table.dupeRow(row, this._columns.size());
+        }
+        NullMask nullMask = this.getRowNullMask(rowBuffer);
+        for (Column column : this._columns) {
+            if (!column.isAutoNumber() && row[column.getColumnIndex()] != Column.KEEP_VALUE) continue;
+            row[column.getColumnIndex()] = Table.getRowColumn(this.getFormat(), rowBuffer, nullMask, column, rowState);
+        }
+        ByteBuffer newRowData = this.createRow(row, this.getFormat().MAX_ROW_SIZE, this._singleRowBufferH.getPageBuffer(this.getPageChannel()), true, oldRowSize);
+        if (newRowData.limit() > this.getFormat().MAX_ROW_SIZE) {
+            throw new IOException("Row size " + newRowData.limit() + " is too large");
+        }
+        Object[] oldRowValues = !this._indexDatas.isEmpty() ? rowState.getRowValues() : null;
+        for (IndexData indexData : this._indexDatas) {
+            indexData.deleteRow(oldRowValues, rowId);
+        }
+        rowBuffer.reset();
+        int rowSize = newRowData.remaining();
+        ByteBuffer dataPage = null;
+        int pageNumber = -1;
+        if (oldRowSize >= rowSize) {
+            rowBuffer.put(newRowData);
+            dataPage = rowState.getFinalPage();
+            pageNumber = rowState.getFinalRowId().getPageNumber();
+        } else {
+            dataPage = this.findFreeRowSpace(rowSize, null, -1);
+            pageNumber = this._addRowBufferH.getPageNumber();
+            RowId headerRowId = rowState.getHeaderRowId();
+            ByteBuffer headerPage = rowState.getHeaderPage();
+            if (pageNumber == headerRowId.getPageNumber()) {
+                dataPage = headerPage;
+            }
+            int rowNum = Table.addDataPageRow(dataPage, rowSize, this.getFormat(), Short.MIN_VALUE);
+            dataPage.put(newRowData);
+            rowBuffer = PageChannel.narrowBuffer(headerPage, Table.findRowStart(headerPage, headerRowId.getRowNumber(), this.getFormat()), Table.findRowEnd(headerPage, headerRowId.getRowNumber(), this.getFormat()));
+            rowBuffer.put((byte)rowNum);
+            ByteUtil.put3ByteInt(rowBuffer, pageNumber);
+            ByteUtil.clearRemaining(rowBuffer);
+            int headerRowIndex = Table.getRowStartOffset(headerRowId.getRowNumber(), this.getFormat());
+            headerPage.putShort(headerRowIndex, (short)(headerPage.getShort(headerRowIndex) | 0x4000));
+            if (pageNumber != headerRowId.getPageNumber()) {
+                this.writeDataPage(headerPage, headerRowId.getPageNumber());
+            }
+        }
+        for (IndexData indexData : this._indexDatas) {
+            indexData.addRow(row, rowId);
+        }
+        this.writeDataPage(dataPage, pageNumber);
+        this.updateTableDefinition(0);
+    }
+
+    private ByteBuffer findFreeRowSpace(int rowSize, ByteBuffer dataPage, int pageNumber) throws IOException {
+        if (dataPage == null) {
+            int tmpPageNumber;
+            UsageMap.PageCursor revPageCursor = this._ownedPages.cursor();
+            revPageCursor.afterLast();
+            while ((tmpPageNumber = revPageCursor.getPreviousPage()) >= 0) {
+                dataPage = this._addRowBufferH.setPage(this.getPageChannel(), tmpPageNumber);
+                if (dataPage.get() != 1) continue;
+                if (!this._freeSpacePages.containsPageNumber(tmpPageNumber)) break;
+                pageNumber = tmpPageNumber;
+                break;
+            }
+            if (pageNumber == -1) {
+                return this.newDataPage();
+            }
+        }
+        if (!Table.rowFitsOnDataPage(rowSize, dataPage, this.getFormat())) {
+            this.writeDataPage(dataPage, pageNumber);
+            this._freeSpacePages.removePageNumber(pageNumber);
+            dataPage = this.newDataPage();
+        }
+        return dataPage;
+    }
+
+    private void updateTableDefinition(int rowCountInc) throws IOException {
+        ByteBuffer tdefPage = this._tableDefBufferH.setPage(this.getPageChannel(), this._tableDefPageNumber);
+        this._rowCount += rowCountInc;
+        tdefPage.putInt(this.getFormat().OFFSET_NUM_ROWS, this._rowCount);
+        tdefPage.putInt(this.getFormat().OFFSET_NEXT_AUTO_NUMBER, this._lastLongAutoNumber);
+        for (IndexData indexData : this._indexDatas) {
+            tdefPage.putInt(indexData.getUniqueEntryCountOffset(), indexData.getUniqueEntryCount());
+            indexData.update();
+        }
+        this.getPageChannel().writePage(tdefPage, this._tableDefPageNumber);
+    }
+
+    private ByteBuffer newDataPage() throws IOException {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Creating new data page");
+        }
+        ByteBuffer dataPage = this._addRowBufferH.setNewPage(this.getPageChannel());
+        dataPage.put((byte)1);
+        dataPage.put((byte)1);
+        dataPage.putShort((short)this.getFormat().DATA_PAGE_INITIAL_FREE_SPACE);
+        dataPage.putInt(this._tableDefPageNumber);
+        dataPage.putInt(0);
+        dataPage.putShort((short)0);
+        int pageNumber = this._addRowBufferH.getPageNumber();
+        this.getPageChannel().writePage(dataPage, pageNumber);
+        this._ownedPages.addPageNumber(pageNumber);
+        this._freeSpacePages.addPageNumber(pageNumber);
+        return dataPage;
+    }
+
+    ByteBuffer createRow(Object[] rowArray, int maxRowSize, ByteBuffer buffer, boolean isUpdate, int minRowSize) throws IOException {
+        int fixedDataStart;
+        buffer.putShort(this._maxColumnCount);
+        NullMask nullMask = new NullMask(this._maxColumnCount);
+        int fixedDataEnd = fixedDataStart = buffer.position();
+        for (Column col : this._columns) {
+            if (col.isVariableLength()) continue;
+            Iterator<Column> rowValue = rowArray[col.getColumnIndex()];
+            if (col.getType() == DataType.BOOLEAN) {
+                if (Column.toBooleanValue(rowValue)) {
+                    nullMask.markNotNull(col);
+                }
+                rowValue = null;
+            } else if (col.isAutoNumber() && !isUpdate) {
+                rowArray[col.getColumnIndex()] = rowValue = col.getAutoNumberGenerator().getNext();
+            }
+            if (rowValue != null) {
+                nullMask.markNotNull(col);
+                buffer.position(fixedDataStart + col.getFixedDataOffset());
+                buffer.put(col.write(rowValue, 0));
+            }
+            buffer.position(fixedDataStart + col.getFixedDataOffset() + col.getLength());
+            if (buffer.position() <= fixedDataEnd) continue;
+            fixedDataEnd = buffer.position();
+        }
+        buffer.position(fixedDataEnd);
+        if (this._maxVarColumnCount > 0) {
+            maxRowSize -= buffer.position();
+            int trailerSize = nullMask.byteSize() + 4 + this._maxVarColumnCount * 2;
+            maxRowSize -= trailerSize;
+            for (Column varCol : this._varColumns) {
+                if (!varCol.getType().isLongValue() || rowArray[varCol.getColumnIndex()] == null) continue;
+                maxRowSize -= this.getFormat().SIZE_LONG_VALUE_DEF;
+            }
+            short[] varColumnOffsets = new short[this._maxVarColumnCount];
+            int varColumnOffsetsIndex = 0;
+            for (Column varCol : this._varColumns) {
+                short offset = (short)buffer.position();
+                Object rowValue = rowArray[varCol.getColumnIndex()];
+                if (rowValue != null) {
+                    nullMask.markNotNull(varCol);
+                    ByteBuffer varDataBuf = varCol.write(rowValue, maxRowSize);
+                    maxRowSize -= varDataBuf.remaining();
+                    if (varCol.getType().isLongValue()) {
+                        maxRowSize += this.getFormat().SIZE_LONG_VALUE_DEF;
+                    }
+                    buffer.put(varDataBuf);
+                }
+                while (varColumnOffsetsIndex <= varCol.getVarLenTableIndex()) {
+                    varColumnOffsets[varColumnOffsetsIndex++] = offset;
+                }
+            }
+            while (varColumnOffsetsIndex < varColumnOffsets.length) {
+                varColumnOffsets[varColumnOffsetsIndex++] = (short)buffer.position();
+            }
+            int eod = buffer.position();
+            this.padRowBuffer(buffer, minRowSize, trailerSize);
+            buffer.putShort((short)eod);
+            int i = this._maxVarColumnCount - 1;
+            while (i >= 0) {
+                buffer.putShort(varColumnOffsets[i]);
+                --i;
+            }
+            buffer.putShort(this._maxVarColumnCount);
+        } else {
+            this.padRowBuffer(buffer, minRowSize, nullMask.byteSize());
+        }
+        nullMask.write(buffer);
+        buffer.flip();
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Creating new data block:\n" + ByteUtil.toHexString(buffer, buffer.limit()));
+        }
+        return buffer;
+    }
+
+    private void padRowBuffer(ByteBuffer buffer, int minRowSize, int trailerSize) {
+        int pos = buffer.position();
+        if (pos + trailerSize < minRowSize) {
+            int padSize = minRowSize - (pos + trailerSize);
+            ByteUtil.clearRange(buffer, pos, pos + padSize);
+            ByteUtil.forward(buffer, padSize);
+        }
+    }
+
+    public int getRowCount() {
+        return this._rowCount;
+    }
+
+    int getNextLongAutoNumber() {
+        return ++this._lastLongAutoNumber;
+    }
+
+    int getLastLongAutoNumber() {
+        return this._lastLongAutoNumber;
+    }
+
+    public String toString() {
+        StringBuilder rtn = new StringBuilder();
+        rtn.append("Type: " + this._tableType);
+        rtn.append("\nName: " + this._name);
+        rtn.append("\nRow count: " + this._rowCount);
+        rtn.append("\nColumn count: " + this._columns.size());
+        rtn.append("\nIndex (data) count: " + this._indexCount);
+        rtn.append("\nLogical Index count: " + this._logicalIndexCount);
+        rtn.append("\nColumns:\n");
+        for (Column col : this._columns) {
+            rtn.append(col);
+        }
+        rtn.append("\nIndexes:\n");
+        for (Index index : this._indexes) {
+            rtn.append(index);
+        }
+        rtn.append("\nOwned pages: " + this._ownedPages + "\n");
+        return rtn.toString();
+    }
+
+    public String display() throws IOException {
+        return this.display(Long.MAX_VALUE);
+    }
+
+    public String display(long limit) throws IOException {
+        Map<String, Object> row;
+        this.reset();
+        StringBuilder rtn = new StringBuilder();
+        Iterator<Column> iter = this._columns.iterator();
+        while (iter.hasNext()) {
+            Column col = iter.next();
+            rtn.append(col.getName());
+            if (!iter.hasNext()) continue;
+            rtn.append("\t");
+        }
+        rtn.append("\n");
+        int rowCount = 0;
+        while ((long)rowCount++ < limit && (row = this.getNextRow()) != null) {
+            Iterator<Object> iter2 = row.values().iterator();
+            while (iter2.hasNext()) {
+                Object obj = iter2.next();
+                if (obj instanceof byte[]) {
+                    byte[] b = (byte[])obj;
+                    rtn.append(ByteUtil.toHexString(b));
+                } else {
+                    rtn.append(String.valueOf(obj));
+                }
+                if (!iter2.hasNext()) continue;
+                rtn.append("\t");
+            }
+            rtn.append("\n");
+        }
+        return rtn.toString();
+    }
+
+    public static int addDataPageRow(ByteBuffer dataPage, int rowSize, JetFormat format, int rowFlags) {
+        int rowSpaceUsage = Table.getRowSpaceUsage(rowSize, format);
+        short freeSpaceInPage = dataPage.getShort(format.OFFSET_FREE_SPACE);
+        dataPage.putShort(format.OFFSET_FREE_SPACE, (short)(freeSpaceInPage - rowSpaceUsage));
+        short rowCount = dataPage.getShort(format.OFFSET_NUM_ROWS_ON_DATA_PAGE);
+        dataPage.putShort(format.OFFSET_NUM_ROWS_ON_DATA_PAGE, (short)(rowCount + 1));
+        short rowLocation = Table.findRowEnd(dataPage, rowCount, format);
+        rowLocation = (short)(rowLocation - rowSize);
+        dataPage.putShort(Table.getRowStartOffset(rowCount, format), (short)(rowLocation | rowFlags));
+        dataPage.position(rowLocation);
+        return rowCount;
+    }
+
+    private static int getRowsOnDataPage(ByteBuffer rowBuffer, JetFormat format) throws IOException {
+        int rowsOnPage = 0;
+        if (rowBuffer != null && rowBuffer.get(0) == 1) {
+            rowsOnPage = rowBuffer.getShort(format.OFFSET_NUM_ROWS_ON_DATA_PAGE);
+        }
+        return rowsOnPage;
+    }
+
+    private static void requireValidRowId(RowId rowId) {
+        if (!rowId.isValid()) {
+            throw new IllegalArgumentException("Given rowId is invalid: " + rowId);
+        }
+    }
+
+    private static void requireNonDeletedRow(RowState rowState, RowId rowId) {
+        if (!rowState.isValid()) {
+            throw new IllegalArgumentException("Given rowId is invalid for this table: " + rowId);
+        }
+        if (rowState.isDeleted()) {
+            throw new IllegalStateException("Row is deleted: " + rowId);
+        }
+    }
+
+    public static boolean isDeletedRow(short rowStart) {
+        return (rowStart & Short.MIN_VALUE) != 0;
+    }
+
+    public static boolean isOverflowRow(short rowStart) {
+        return (rowStart & 0x4000) != 0;
+    }
+
+    public static short cleanRowStart(short rowStart) {
+        return (short)(rowStart & 0x1FFF);
+    }
+
+    public static short findRowStart(ByteBuffer buffer, int rowNum, JetFormat format) {
+        return Table.cleanRowStart(buffer.getShort(Table.getRowStartOffset(rowNum, format)));
+    }
+
+    public static int getRowStartOffset(int rowNum, JetFormat format) {
+        return format.OFFSET_ROW_START + format.SIZE_ROW_LOCATION * rowNum;
+    }
+
+    public static short findRowEnd(ByteBuffer buffer, int rowNum, JetFormat format) {
+        return (short)(rowNum == 0 ? format.PAGE_SIZE : (int)Table.cleanRowStart(buffer.getShort(Table.getRowEndOffset(rowNum, format))));
+    }
+
+    public static int getRowEndOffset(int rowNum, JetFormat format) {
+        return format.OFFSET_ROW_START + format.SIZE_ROW_LOCATION * (rowNum - 1);
+    }
+
+    public static int getRowSpaceUsage(int rowSize, JetFormat format) {
+        return rowSize + format.SIZE_ROW_LOCATION;
+    }
+
+    public static List<Column> getAutoNumberColumns(Collection<Column> columns) {
+        ArrayList<Column> autoCols = new ArrayList<Column>();
+        for (Column c : columns) {
+            if (!c.isAutoNumber()) continue;
+            autoCols.add(c);
+        }
+        return autoCols;
+    }
+
+    public static boolean rowFitsOnDataPage(int rowLength, ByteBuffer dataPage, JetFormat format) throws IOException {
+        int rowSpaceUsage = Table.getRowSpaceUsage(rowLength, format);
+        short freeSpaceInPage = dataPage.getShort(format.OFFSET_FREE_SPACE);
+        int rowsOnPage = Table.getRowsOnDataPage(dataPage, format);
+        return rowSpaceUsage <= freeSpaceInPage && rowsOnPage < format.MAX_NUM_ROWS_ON_DATA_PAGE;
+    }
+
+    static Object[] dupeRow(Object[] row, int newRowLength) {
+        Object[] copy = new Object[newRowLength];
+        System.arraycopy(row, 0, copy, 0, row.length);
+        return copy;
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    public static enum ColumnOrder {
+        DATA,
+        DISPLAY;
+
+    }
+
+    public final class RowState {
+        private final TempPageHolder _headerRowBufferH;
+        private RowId _headerRowId = RowId.FIRST_ROW_ID;
+        private int _rowsOnHeaderPage;
+        private RowStateStatus _status = RowStateStatus.INIT;
+        private RowStatus _rowStatus = RowStatus.INIT;
+        private final TempPageHolder _overflowRowBufferH = TempPageHolder.newHolder(TempBufferHolder.Type.SOFT);
+        private ByteBuffer _finalRowBuffer;
+        private RowId _finalRowId = null;
+        private boolean _haveRowValues;
+        private final Object[] _rowValues;
+        private int _lastModCount;
+        private ErrorHandler _errorHandler;
+        private short[] _varColOffsets;
+
+        private RowState(TempBufferHolder.Type headerType) {
+            this._headerRowBufferH = TempPageHolder.newHolder(headerType);
+            this._rowValues = new Object[Table.this.getColumnCount()];
+            this._lastModCount = Table.this._modCount;
+        }
+
+        public Table getTable() {
+            return Table.this;
+        }
+
+        public ErrorHandler getErrorHandler() {
+            return this._errorHandler != null ? this._errorHandler : this.getTable().getErrorHandler();
+        }
+
+        public void setErrorHandler(ErrorHandler newErrorHandler) {
+            this._errorHandler = newErrorHandler;
+        }
+
+        public void reset() {
+            this._finalRowId = null;
+            this._finalRowBuffer = null;
+            this._rowsOnHeaderPage = 0;
+            this._status = RowStateStatus.INIT;
+            this._rowStatus = RowStatus.INIT;
+            this._varColOffsets = null;
+            if (this._haveRowValues) {
+                Arrays.fill(this._rowValues, null);
+                this._haveRowValues = false;
+            }
+        }
+
+        public boolean isUpToDate() {
+            return Table.this._modCount == this._lastModCount;
+        }
+
+        private void checkForModification() {
+            if (!this.isUpToDate()) {
+                this.reset();
+                this._headerRowBufferH.invalidate();
+                this._overflowRowBufferH.invalidate();
+                this._lastModCount = Table.this._modCount;
+            }
+        }
+
+        private ByteBuffer getFinalPage() throws IOException {
+            if (this._finalRowBuffer == null) {
+                this._finalRowBuffer = this.getHeaderPage();
+            }
+            return this._finalRowBuffer;
+        }
+
+        public RowId getFinalRowId() {
+            if (this._finalRowId == null) {
+                this._finalRowId = this.getHeaderRowId();
+            }
+            return this._finalRowId;
+        }
+
+        private void setRowStatus(RowStatus rowStatus) {
+            this._rowStatus = rowStatus;
+        }
+
+        public boolean isValid() {
+            return this._rowStatus.ordinal() >= RowStatus.VALID.ordinal();
+        }
+
+        public boolean isDeleted() {
+            return this._rowStatus == RowStatus.DELETED;
+        }
+
+        public boolean isOverflow() {
+            return this._rowStatus == RowStatus.OVERFLOW;
+        }
+
+        public boolean isHeaderPageNumberValid() {
+            return this._rowStatus.ordinal() > RowStatus.INVALID_PAGE.ordinal();
+        }
+
+        public boolean isHeaderRowNumberValid() {
+            return this._rowStatus.ordinal() > RowStatus.INVALID_ROW.ordinal();
+        }
+
+        private void setStatus(RowStateStatus status) {
+            this._status = status;
+        }
+
+        public boolean isAtHeaderRow() {
+            return this._status.ordinal() >= RowStateStatus.AT_HEADER.ordinal();
+        }
+
+        public boolean isAtFinalRow() {
+            return this._status.ordinal() >= RowStateStatus.AT_FINAL.ordinal();
+        }
+
+        private Object setRowValue(int idx, Object value) {
+            this._haveRowValues = true;
+            this._rowValues[idx] = value;
+            return value;
+        }
+
+        public Object[] getRowValues() {
+            return Table.dupeRow(this._rowValues, this._rowValues.length);
+        }
+
+        private short[] getVarColOffsets() {
+            return this._varColOffsets;
+        }
+
+        private void setVarColOffsets(short[] varColOffsets) {
+            this._varColOffsets = varColOffsets;
+        }
+
+        public RowId getHeaderRowId() {
+            return this._headerRowId;
+        }
+
+        public int getRowsOnHeaderPage() {
+            return this._rowsOnHeaderPage;
+        }
+
+        private ByteBuffer getHeaderPage() throws IOException {
+            this.checkForModification();
+            return this._headerRowBufferH.getPage(Table.this.getPageChannel());
+        }
+
+        private ByteBuffer setHeaderRow(RowId rowId) throws IOException {
+            this.checkForModification();
+            if (this.isAtHeaderRow() && this.getHeaderRowId().equals(rowId)) {
+                return this.isValid() ? this.getHeaderPage() : null;
+            }
+            this.reset();
+            this._headerRowId = rowId;
+            this._finalRowId = rowId;
+            int pageNumber = rowId.getPageNumber();
+            int rowNumber = rowId.getRowNumber();
+            if (pageNumber < 0 || !Table.this._ownedPages.containsPageNumber(pageNumber)) {
+                this.setRowStatus(RowStatus.INVALID_PAGE);
+                return null;
+            }
+            this._finalRowBuffer = this._headerRowBufferH.setPage(Table.this.getPageChannel(), pageNumber);
+            this._rowsOnHeaderPage = Table.getRowsOnDataPage(this._finalRowBuffer, Table.this.getFormat());
+            if (rowNumber < 0 || rowNumber >= this._rowsOnHeaderPage) {
+                this.setRowStatus(RowStatus.INVALID_ROW);
+                return null;
+            }
+            this.setRowStatus(RowStatus.VALID);
+            return this._finalRowBuffer;
+        }
+
+        private ByteBuffer setOverflowRow(RowId rowId) throws IOException {
+            if (!this.isUpToDate()) {
+                throw new IllegalStateException("Table modified while searching?");
+            }
+            if (this._rowStatus != RowStatus.OVERFLOW) {
+                throw new IllegalStateException("Row is not an overflow row?");
+            }
+            this._finalRowId = rowId;
+            this._finalRowBuffer = this._overflowRowBufferH.setPage(Table.this.getPageChannel(), rowId.getPageNumber());
+            return this._finalRowBuffer;
+        }
+
+        private Object handleRowError(Column column, byte[] columnData, Exception error) throws IOException {
+            return this.getErrorHandler().handleRowError(column, columnData, this, error);
+        }
+
+        public String toString() {
+            return "RowState: headerRowId = " + this._headerRowId + ", finalRowId = " + this._finalRowId;
+        }
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private static enum RowStateStatus {
+        INIT,
+        AT_HEADER,
+        AT_FINAL;
+
+    }
+
+    /*
+     * This class specifies class file version 49.0 but uses Java 6 signatures.  Assumed Java 6.
+     */
+    private static enum RowStatus {
+        INIT,
+        INVALID_PAGE,
+        INVALID_ROW,
+        VALID,
+        DELETED,
+        NORMAL,
+        OVERFLOW;
+
+    }
+}
+
