@@ -600,6 +600,113 @@ class LocalDatabaseManager {
         }
     }
     
+    /// Get all unsynced payees
+    func getUnsyncedPayees() throws -> [LocalPayee] {
+        let sql = """
+        SELECT hpay, hpayParent, haddr, mComment, fHidden, szAls, szFull, mAcctNum,
+               mBankId, mBranchId, mUserAcctAtPay, mIntlChkSum, mCompanyName, mContact,
+               haddrBill, haddrShip, mCellPhone, mPager, mWebPage, terms, mPmtType,
+               mCCNum, dtCCExp, dDiscount, dRateTax, fVendor, fCust,
+               dtLastModified, lContactData, shippref, fNoRecurringBill, dtSerial,
+               grfcontt, fAutofillMemo, dtLast, sguid, fUpdated, fGlobal, fLocal
+        FROM PAY
+        WHERE is_synced = 0
+        """
+        
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            let errmsg = String(cString: sqlite3_errmsg(db))
+            throw DatabaseError.prepareFailed(errmsg)
+        }
+        
+        defer { sqlite3_finalize(statement) }
+        
+        var payees: [LocalPayee] = []
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            let payee = LocalPayee(
+                hpay: Int(sqlite3_column_int(statement, 0)),
+                hpayParent: columnIntOrNil(statement, 1),
+                haddr: columnIntOrNil(statement, 2),
+                mComment: columnString(statement, 3),
+                fHidden: sqlite3_column_int(statement, 4) != 0,
+                szAls: columnString(statement, 5),
+                szFull: columnString(statement, 6) ?? "",
+                mAcctNum: columnString(statement, 7),
+                mBankId: columnString(statement, 8),
+                mBranchId: columnString(statement, 9),
+                mUserAcctAtPay: columnString(statement, 10),
+                mIntlChkSum: columnString(statement, 11),
+                mCompanyName: columnString(statement, 12),
+                mContact: columnString(statement, 13),
+                haddrBill: columnIntOrNil(statement, 14),
+                haddrShip: columnIntOrNil(statement, 15),
+                mCellPhone: columnString(statement, 16),
+                mPager: columnString(statement, 17),
+                mWebPage: columnString(statement, 18),
+                terms: Int(sqlite3_column_int(statement, 19)),
+                mPmtType: columnString(statement, 20),
+                mCCNum: columnString(statement, 21),
+                dtCCExp: columnString(statement, 22),
+                dDiscount: sqlite3_column_double(statement, 23),
+                dRateTax: sqlite3_column_double(statement, 24),
+                fVendor: sqlite3_column_int(statement, 25) != 0,
+                fCust: sqlite3_column_int(statement, 26) != 0,
+                dtLastModified: columnString(statement, 27) ?? "",
+                lContactData: Int(sqlite3_column_int(statement, 28)),
+                shippref: Int(sqlite3_column_int(statement, 29)),
+                fNoRecurringBill: sqlite3_column_int(statement, 30) != 0,
+                dtSerial: columnString(statement, 31) ?? "",
+                grfcontt: Int(sqlite3_column_int(statement, 32)),
+                fAutofillMemo: sqlite3_column_int(statement, 33) != 0,
+                dtLast: columnString(statement, 34),
+                sguid: columnString(statement, 35) ?? "",
+                fUpdated: sqlite3_column_int(statement, 36) != 0,
+                fGlobal: sqlite3_column_int(statement, 37) != 0,
+                fLocal: sqlite3_column_int(statement, 38) != 0
+            )
+            
+            payees.append(payee)
+        }
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] ✅ Retrieved \(payees.count) unsynced payees")
+        #endif
+        
+        return payees
+    }
+    
+    /// Clear all synced records from local database
+    func clearSyncedRecords() throws {
+        // Delete synced transactions
+        let deleteTrnSql = "DELETE FROM TRN WHERE is_synced = 1"
+        try execute(deleteTrnSql)
+        
+        // Delete synced payees
+        let deletePaySql = "DELETE FROM PAY WHERE is_synced = 1"
+        try execute(deletePaySql)
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] ✅ Cleared synced records from local database")
+        #endif
+    }
+    
+    /// Mark records as synced
+    func markRecordsAsSynced() throws {
+        // Mark all transactions as synced
+        let updateTrnSql = "UPDATE TRN SET is_synced = 1 WHERE is_synced = 0"
+        try execute(updateTrnSql)
+        
+        // Mark all payees as synced
+        let updatePaySql = "UPDATE PAY SET is_synced = 1 WHERE is_synced = 0"
+        try execute(updatePaySql)
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] ✅ Marked all records as synced")
+        #endif
+    }
+    
     // MARK: - Helper Methods for Reading Columns
     
     private func columnString(_ statement: OpaquePointer?, _ index: Int32) -> String? {

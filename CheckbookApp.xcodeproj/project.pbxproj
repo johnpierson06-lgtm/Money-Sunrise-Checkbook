@@ -141,9 +141,11 @@
 			membershipExceptions = (
 				AccountsView.swift,
 				FolderBrowserView.swift,
+				JackcessBridge.swift,
 				MainCheckbookView.swift,
 				NewTransactionView.swift,
 				SplashScreenView.swift,
+				SyncView.swift,
 				TransactionsView.swift,
 				ViewControllerResolver.swift,
 			);
@@ -158,10 +160,17 @@
 				Index.txt,
 				IndexData.txt,
 				Insert.txt,
-				MnyTableModel.txt,
 				money_insert.py,
 				NewRowDialog.txt,
 				"Table 1.txt",
+			);
+			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
+		};
+		DCF2413C2F2416E800F45C2E /* Exceptions for "Services" folder in "CheckbookApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				JackcessBridge.swift,
+				MDBToolsNativeWriter.swift,
 			);
 			target = DC59B70B2EB576080090E338 /* CheckbookApp */;
 		};
@@ -231,6 +240,9 @@
 		};
 		DCF240F22F23312500F45C2E /* Services */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCF2413C2F2416E800F45C2E /* Exceptions for "Services" folder in "CheckbookApp" target */,
+			);
 			path = Services;
 			sourceTree = "<group>";
 		};

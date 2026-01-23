@@ -114,10 +114,16 @@ struct AccountsView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Refresh") {
-                        refreshAccounts()
+                    HStack(spacing: 12) {
+                        NavigationLink(destination: SyncView().environmentObject(coordinator)) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                        }
+                        
+                        Button("Refresh") {
+                            refreshAccounts()
+                        }
+                        .disabled(isLoading || isProcessingPassword)
                     }
-                    .disabled(isLoading || isProcessingPassword)
                 }
             }
             .sheet(isPresented: $showPasswordPrompt) {
