@@ -388,45 +388,33 @@ private enum MoneyDecryptorCore {
     }
     
     // Apply page number to encoding key (matches Java applyPageNumber)
-    // This modifies the key at a specific offset with the page number
+    // This XORs the page number with bytes 16-19 of the encoding key
     private static func applyPageNumber(encodingKey: [UInt8], pageNumber: Int) -> [UInt8] {
         var tmp = encodingKey  // Make a copy
         
-        // The offset where we insert the page number (always 16 in the Java code)
+        // The offset where we XOR the page number (always 16 in Jackcess)
         let offset = 16
         
-        // Write page number as little-endian Int32 at offset
+        // Write page number as little-endian Int32
         let pageBytes = withUnsafeBytes(of: Int32(pageNumber).littleEndian) { Array($0) }
         
         #if DEBUG
-        if pageNumber == 1 {  // Only log for page 1 to avoid spam
+        if pageNumber <= 2 {  // Log for page 1 and 2
             dbg("applyPageNumber: pageNumber=\(pageNumber), pageBytes=\(hex(pageBytes))")
-            dbg("  Original bytes 16-19: \(hex(Array(tmp[offset..<min(offset+4, tmp.count)])))")
+            dbg("  Original key bytes 16-19: \(hex(Array(tmp[offset..<min(offset+4, tmp.count)])))")
         }
         #endif
         
-        // Replace 4 bytes at offset with page number bytes
+        // XOR the key bytes at offset with the page number bytes
+        // This is the CORRECT Jackcess algorithm: key[16-19] ^= pageNumber
         for i in 0..<4 {
             if offset + i < tmp.count {
-                tmp[offset + i] = pageBytes[i]
+                tmp[offset + i] ^= pageBytes[i]
             }
         }
         
         #if DEBUG
-        if pageNumber == 1 {
-            dbg("  After write bytes 16-19: \(hex(Array(tmp[offset..<min(offset+4, tmp.count)])))")
-        }
-        #endif
-        
-        // XOR the 4 bytes we just wrote with the original key bytes at that position
-        for i in offset..<(offset + 4) {
-            if i < tmp.count && i < encodingKey.count {
-                tmp[i] ^= encodingKey[i]
-            }
-        }
-        
-        #if DEBUG
-        if pageNumber == 1 {
+        if pageNumber <= 2 {
             dbg("  After XOR bytes 16-19: \(hex(Array(tmp[offset..<min(offset+4, tmp.count)])))")
         }
         #endif
@@ -484,7 +472,49 @@ private enum MoneyDecryptorCore {
         let tmpDir = FileManager.default.temporaryDirectory
         let base = originalURL.deletingPathExtension().lastPathComponent
         let tmpURL = tmpDir.appendingPathComponent("\(base)-decrypted-\(UUID().uuidString).mdb")
-        try Data(buffer).write(to: tmpURL, options: .atomic)
+        
+        let data = Data(buffer)
+        try data.write(to: tmpURL, options: .atomic)
+        
+        #if DEBUG
+        // CRITICAL: Verify the written file is readable and decrypted
+        if let verifyData = try? Data(contentsOf: tmpURL) {
+            dbg("Verification: Written file size = \(verifyData.count) bytes")
+            
+            // Verify page 0 (header)
+            if verifyData.count >= pageSize {
+                let page0Bytes = Array(verifyData[0..<16])
+                dbg("Verification: Page 0 first 16 bytes = \(hex(page0Bytes))")
+            }
+            
+            // Verify page 1 (should be decrypted)
+            if verifyData.count >= 2 * pageSize {
+                let page1Start = pageSize
+                let page1Bytes = Array(verifyData[page1Start..<(page1Start + 16)])
+                dbg("Verification: Page 1 first 16 bytes = \(hex(page1Bytes))")
+                dbg("Verification: Page 1 type byte = 0x\(String(format: "%02X", page1Bytes[0]))")
+                
+                if page1Bytes[0] != 0x01 {
+                    dbg("⚠️⚠️⚠️ WARNING: Page 1 type is NOT 0x01! Decryption may have failed!")
+                }
+            }
+            
+            // Verify page 2 (MSysObjects - should be decrypted)
+            if verifyData.count >= 3 * pageSize {
+                let page2Start = 2 * pageSize
+                let page2Bytes = Array(verifyData[page2Start..<(page2Start + 16)])
+                dbg("Verification: Page 2 first 16 bytes = \(hex(page2Bytes))")
+                dbg("Verification: Page 2 type byte = 0x\(String(format: "%02X", page2Bytes[0]))")
+                
+                if page2Bytes[0] != 0x02 {
+                    dbg("⚠️⚠️⚠️ WARNING: Page 2 type is NOT 0x02! MSysObjects is encrypted/corrupted!")
+                }
+            }
+        } else {
+            dbg("⚠️ WARNING: Could not re-read written file for verification!")
+        }
+        #endif
+        
         return tmpURL
     }
 

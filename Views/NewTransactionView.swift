@@ -306,12 +306,10 @@ struct NewTransactionView: View {
         
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                print("💾 Getting next transaction ID...")
+                print("💾 Creating transaction...")
                 
-                // Get next transaction ID
-                let nextId = try LocalDatabaseManager.shared.getNextTransactionId()
-                
-                print("✅ Next ID: \(nextId)")
+                // Use temporary ID - will be assigned real htrn during sync
+                let tempId = 0  // SQLite will auto-increment
                 
                 // Determine if amount should be negative (expense) or positive (income)
                 let finalAmount = categoryWithType.isExpense ? -abs(amountDecimal) : abs(amountDecimal)
@@ -320,7 +318,7 @@ struct NewTransactionView: View {
                 
                 // Create new transaction
                 let transaction = LocalTransaction.createNew(
-                    id: nextId,
+                    id: tempId,
                     accountId: account.id,
                     date: date,
                     amount: finalAmount,
@@ -330,7 +328,7 @@ struct NewTransactionView: View {
                     isTransfer: false
                 )
                 
-                print("📝 Transaction created: ID=\(nextId), Account=\(account.id), Amount=\(finalAmount)")
+                print("📝 Transaction created with temp ID, Account=\(account.id), Amount=\(finalAmount)")
                 print("💾 About to insert into database...")
                 
                 // Save to local database
@@ -342,7 +340,7 @@ struct NewTransactionView: View {
                     self.isSaving = false
                     
                     #if DEBUG
-                    print("[NewTransactionView] ✅ Transaction saved: ID=\(nextId), Amount=\(finalAmount)")
+                    print("[NewTransactionView] ✅ Transaction saved with temp ID, Amount=\(finalAmount)")
                     #endif
                     
                     print("👋 Dismissing view...")
@@ -364,12 +362,29 @@ struct NewTransactionView: View {
     }
     
     private func addNewPayee(name: String) {
+        #if DEBUG
+        print("[NewTransactionView] addNewPayee called with name: '\(name)'")
+        #endif
+        
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let nextId = try LocalDatabaseManager.shared.getNextPayeeId()
+                
+                #if DEBUG
+                print("[NewTransactionView] Next payee ID: \(nextId)")
+                #endif
+                
                 let newPayee = LocalPayee.createNew(id: nextId, name: name)
                 
+                #if DEBUG
+                print("[NewTransactionView] Created LocalPayee: hpay=\(newPayee.hpay), szFull='\(newPayee.szFull)'")
+                #endif
+                
                 try LocalDatabaseManager.shared.insertPayee(newPayee)
+                
+                #if DEBUG
+                print("[NewTransactionView] Inserted payee into database")
+                #endif
                 
                 // Add to local payees list
                 let moneyPayee = MoneyPayee(id: nextId, name: name)
@@ -409,6 +424,7 @@ struct CategoryPickerView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var searchText = ""
+    @State private var isSearchPresented = false
     
     var body: some View {
         NavigationStack {
@@ -443,7 +459,7 @@ struct CategoryPickerView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search categories")
+            .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search categories")
             .navigationTitle("Select Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -451,6 +467,12 @@ struct CategoryPickerView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                }
+            }
+            .onAppear {
+                // Automatically show the search field when the view appears
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    isSearchPresented = true
                 }
             }
         }
@@ -563,6 +585,7 @@ struct PayeePickerView: View {
     @State private var searchText = ""
     @State private var showingAddPayee = false
     @State private var newPayeeName = ""
+    @State private var isSearchPresented = false
     
     var body: some View {
         NavigationStack {
@@ -601,7 +624,7 @@ struct PayeePickerView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search payees")
+            .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search payees")
             .navigationTitle("Select Payee")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -634,6 +657,12 @@ struct PayeePickerView: View {
                 }
             } message: {
                 Text("Enter the name of the new payee")
+            }
+            .onAppear {
+                // Automatically show the search field when the view appears
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    isSearchPresented = true
+                }
             }
         }
     }

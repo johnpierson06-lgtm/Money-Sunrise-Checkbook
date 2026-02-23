@@ -91,6 +91,9 @@ struct AccountsView: View {
                             }
                         }
                     }
+                    .refreshable {
+                        await refreshAccountsAsync()
+                    }
                 }
             }
             .navigationTitle("Accounts")
@@ -147,6 +150,16 @@ struct AccountsView: View {
             }
         }
         .background(ViewControllerResolver { vc in self.presenterVC = vc })
+        .onAppear {
+            // Refresh accounts when view appears (e.g., navigating back from TransactionsView)
+            // Only refresh if we already have accounts loaded (to avoid duplicate initial load)
+            if !accounts.isEmpty {
+                #if DEBUG
+                print("[AccountsView] 🔄 View appeared - refreshing account balances")
+                #endif
+                loadAccountBalancesOnly()
+            }
+        }
     }
     
     private func handlePasswordSubmit(password: String) {
@@ -317,6 +330,54 @@ struct AccountsView: View {
                     print("[AccountsView] Error checking for LRD file: \(error.localizedDescription)")
                 }
                 #endif
+            }
+        }
+    }
+    
+    /// Refresh account balances only (lightweight refresh when returning from detail views)
+    private func loadAccountBalancesOnly() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                // Use AccountBalanceService to get balances with local transactions
+                let enhancedSummaries = try AccountBalanceService.readAccountSummariesWithLocal()
+                
+                // Map to UIAccount
+                let uiAccounts = enhancedSummaries.map { s in
+                    UIAccount(
+                        id: s.id,
+                        name: s.name,
+                        openingBalance: s.beginningBalance,
+                        currentBalance: s.currentBalance,
+                        hasUnsyncedTransactions: s.hasUnsyncedTransactions
+                    )
+                }
+                
+                DispatchQueue.main.async {
+                    self.accounts = uiAccounts
+                    
+                    #if DEBUG
+                    print("[AccountsView] ✅ Refreshed \(uiAccounts.count) account balances")
+                    let totalUnsynced = uiAccounts.filter { $0.hasUnsyncedTransactions }.count
+                    if totalUnsynced > 0 {
+                        print("[AccountsView] ⚠️ \(totalUnsynced) accounts have unsynced transactions")
+                    }
+                    #endif
+                }
+            } catch {
+                #if DEBUG
+                print("[AccountsView] ❌ Error refreshing account balances: \(error)")
+                #endif
+            }
+        }
+    }
+    
+    /// Async version of refresh for pull-to-refresh
+    private func refreshAccountsAsync() async {
+        await withCheckedContinuation { continuation in
+            loadAccountBalancesOnly()
+            // Give it a moment to complete
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                continuation.resume()
             }
         }
     }

@@ -87,10 +87,40 @@ struct LocalTransaction {
     ) -> LocalTransaction {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MM/dd/yy HH:mm:ss"
-        let dateString = dateFormatter.string(from: date)
+        dateFormatter.timeZone = TimeZone(identifier: "America/Denver") ?? TimeZone.current
         
+        // Strip time from transaction date (Money expects 00:00:00)
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "America/Denver") ?? TimeZone.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let dateAtMidnight = calendar.date(from: dateComponents) ?? date
+        let dateString = dateFormatter.string(from: dateAtMidnight)
+        
+        #if DEBUG
+        print("[LocalTransaction] Creating transaction with date:")
+        print("  Input date: \(date)")
+        print("  Date at midnight: \(dateAtMidnight)")
+        print("  Formatted string: '\(dateString)'")
+        #endif
+        
+        // Current date/time for dtSerial (when transaction was entered)
         let currentDateTime = dateFormatter.string(from: Date())
-        let nullDate = "01/00/00 00:00:00"
+        
+        #if DEBUG
+        print("  Current date/time: '\(currentDateTime)'")
+        #endif
+        
+        // NULL_DATE must match real Money data
+        // From actual .mny file analysis: 2958524.2916666665
+        // This is Mon Feb 28 00:00:00 MST 10000 (7:00:00 UTC)
+        // 
+        // CRITICAL: Use a marker string that allocOleDate will detect
+        // Format doesn't matter since allocOleDate checks for "10000" and converts directly
+        let nullDate = "NULL_10000"  // Will be detected and converted to 2958524.2916666665
+        
+        #if DEBUG
+        print("  NULL date marker: '\(nullDate)'")
+        #endif
         
         // Generate GUID
         let guid = "{\(UUID().uuidString)}"
@@ -116,7 +146,7 @@ struct LocalTransaction {
             ps: 0,
             amtVat: 0.0,
             grftt: isTransfer ? 2 : 0,
-            act: -1,
+            act: -1,  // CRITICAL: Must be -1 for regular transactions
             cFrqInst: nil,
             fPrint: 0,
             mFiStmtId: nil,
@@ -210,11 +240,22 @@ struct LocalPayee {
     static func createNew(id: Int, name: String) -> LocalPayee {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MM/dd/yy HH:mm:ss"
+        dateFormatter.timeZone = TimeZone(identifier: "America/Denver") ?? TimeZone.current
         let currentDateTime = dateFormatter.string(from: Date())
-        let nullDate = "01/00/00 00:00:00"
+        
+        // NULL_DATE must match real Money data - use marker that allocOleDate will detect
+        let nullDate = "NULL_10000"  // Will be converted to 2958524.0 (minus 7hrs to compensate for timezone)
         
         // Generate GUID
-        let guid = "{\(UUID().uuidString)}"
+        let guid = "{\(UUID().uuidString.uppercased())}"
+        
+        #if DEBUG
+        print("[LocalPayee.createNew] Creating payee:")
+        print("  id: \(id)")
+        print("  name: '\(name)'")
+        print("  currentDateTime: '\(currentDateTime)'")
+        print("  guid: '\(guid)'")
+        #endif
         
         return LocalPayee(
             hpay: id,

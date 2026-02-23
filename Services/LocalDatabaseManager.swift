@@ -78,10 +78,82 @@ class LocalDatabaseManager {
     }
     
     private func createTables() throws {
+        // Check if we need to migrate from old schema
+        let checkSql = "SELECT sql FROM sqlite_master WHERE type='table' AND name='TRN'"
+        var statement: OpaquePointer?
+        var needsMigration = false
+        
+        if sqlite3_prepare_v2(db, checkSql, -1, &statement, nil) == SQLITE_OK {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                if let sqlPtr = sqlite3_column_text(statement, 0) {
+                    let existingSql = String(cString: sqlPtr)
+                    // Check if old schema (htrn as PRIMARY KEY)
+                    if existingSql.contains("htrn INTEGER PRIMARY KEY") {
+                        needsMigration = true
+                    }
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+        
+        if needsMigration {
+            #if DEBUG
+            print("[LocalDatabaseManager] ⚠️  Old schema detected - migrating data...")
+            #endif
+            
+            // Rename old table
+            try execute("ALTER TABLE TRN RENAME TO TRN_old")
+            try execute("ALTER TABLE PAY RENAME TO PAY_old")
+            
+            // Create new tables
+            try createNewTables()
+            
+            // Copy data
+            try execute("""
+                INSERT INTO TRN (htrn, hacct, hacctLink, dt, dtSent, dtCleared, dtPost, cs, hsec, amt,
+                                szId, hcat, frq, fDefPmt, mMemo, oltt, grfEntryMethods, ps, amtVat, grftt,
+                                act, cFrqInst, fPrint, mFiStmtId, olst, fDebtPlan, grfstem, cpmtsRemaining,
+                                instt, htrnSrc, payt, grftf, lHtxsrc, lHcrncUser, amtUser, amtVATUser,
+                                tef, fRefund, fReimburse, dtSerial, fUpdated, fCCPmt, fDefBillAmt, fDefBillDate,
+                                lHclsKak, lHcls1, lHcls2, dtCloseOffYear, dtOldRel, hbillHead, iinst, amtBase,
+                                rt, amtPreRec, amtPreRecUser, hstmtRel, dRateToBase, lHpay, sguid, szAggTrnId,
+                                rgbDigest, is_synced)
+                SELECT htrn, hacct, hacctLink, dt, dtSent, dtCleared, dtPost, cs, hsec, amt,
+                       szId, hcat, frq, fDefPmt, mMemo, oltt, grfEntryMethods, ps, amtVat, grftt,
+                       act, cFrqInst, fPrint, mFiStmtId, olst, fDebtPlan, grfstem, cpmtsRemaining,
+                       instt, htrnSrc, payt, grftf, lHtxsrc, lHcrncUser, amtUser, amtVATUser,
+                       tef, fRefund, fReimburse, dtSerial, fUpdated, fCCPmt, fDefBillAmt, fDefBillDate,
+                       lHclsKak, lHcls1, lHcls2, dtCloseOffYear, dtOldRel, hbillHead, iinst, amtBase,
+                       rt, amtPreRec, amtPreRecUser, hstmtRel, dRateToBase, lHpay, sguid, szAggTrnId,
+                       rgbDigest, is_synced
+                FROM TRN_old
+            """)
+            
+            try execute("""
+                INSERT INTO PAY SELECT * FROM PAY_old
+            """)
+            
+            // Drop old tables
+            try execute("DROP TABLE TRN_old")
+            try execute("DROP TABLE PAY_old")
+            
+            #if DEBUG
+            print("[LocalDatabaseManager] ✅ Migration complete")
+            #endif
+        } else {
+            // No migration needed, just create tables if they don't exist
+            try createNewTables()
+        }
+    }
+    
+    private func createNewTables() throws {
         // Create TRN table with all 61 columns
+        // local_id is auto-incrementing for local storage only
+        // htrn will be assigned during sync from Money file
         let createTrnTable = """
         CREATE TABLE IF NOT EXISTS TRN (
-            htrn INTEGER PRIMARY KEY,
+            local_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            htrn INTEGER,
             hacct INTEGER,
             hacctLink TEXT,
             dt TEXT,
@@ -249,10 +321,10 @@ class LocalDatabaseManager {
         sqlite3_bind_int(statement, 1, Int32(transaction.htrn))
         sqlite3_bind_int(statement, 2, Int32(transaction.hacct))
         bindTextOrNull(statement, 3, transaction.hacctLink)
-        sqlite3_bind_text(statement, 4, transaction.dt, -1, nil)
-        sqlite3_bind_text(statement, 5, transaction.dtSent, -1, nil)
-        sqlite3_bind_text(statement, 6, transaction.dtCleared, -1, nil)
-        sqlite3_bind_text(statement, 7, transaction.dtPost, -1, nil)
+        bindText(statement, 4, transaction.dt)
+        bindText(statement, 5, transaction.dtSent)
+        bindText(statement, 6, transaction.dtCleared)
+        bindText(statement, 7, transaction.dtPost)
         sqlite3_bind_int(statement, 8, Int32(transaction.cs))
         bindTextOrNull(statement, 9, transaction.hsec)
         sqlite3_bind_double(statement, 10, NSDecimalNumber(decimal: transaction.amt).doubleValue)
@@ -285,7 +357,7 @@ class LocalDatabaseManager {
         sqlite3_bind_int(statement, 37, Int32(transaction.tef))
         sqlite3_bind_int(statement, 38, Int32(transaction.fRefund))
         sqlite3_bind_int(statement, 39, Int32(transaction.fReimburse))
-        sqlite3_bind_text(statement, 40, transaction.dtSerial, -1, nil)
+        bindText(statement, 40, transaction.dtSerial)
         sqlite3_bind_int(statement, 41, Int32(transaction.fUpdated))
         sqlite3_bind_int(statement, 42, Int32(transaction.fCCPmt))
         sqlite3_bind_int(statement, 43, Int32(transaction.fDefBillAmt))
@@ -293,8 +365,8 @@ class LocalDatabaseManager {
         sqlite3_bind_int(statement, 45, Int32(transaction.lHclsKak))
         sqlite3_bind_int(statement, 46, Int32(transaction.lHcls1))
         sqlite3_bind_int(statement, 47, Int32(transaction.lHcls2))
-        sqlite3_bind_text(statement, 48, transaction.dtCloseOffYear, -1, nil)
-        sqlite3_bind_text(statement, 49, transaction.dtOldRel, -1, nil)
+        bindText(statement, 48, transaction.dtCloseOffYear)
+        bindText(statement, 49, transaction.dtOldRel)
         bindTextOrNull(statement, 50, transaction.hbillHead)
         sqlite3_bind_int(statement, 51, Int32(transaction.iinst))
         bindTextOrNull(statement, 52, transaction.amtBase)
@@ -304,7 +376,7 @@ class LocalDatabaseManager {
         bindTextOrNull(statement, 56, transaction.hstmtRel)
         bindTextOrNull(statement, 57, transaction.dRateToBase)
         bindIntOrNull(statement, 58, transaction.lHpay)
-        sqlite3_bind_text(statement, 59, transaction.sguid, -1, nil)
+        bindText(statement, 59, transaction.sguid)
         bindTextOrNull(statement, 60, transaction.szAggTrnId)
         bindTextOrNull(statement, 61, transaction.rgbDigest)
         
@@ -419,48 +491,18 @@ class LocalDatabaseManager {
         return transactions
     }
     
-    /// Get the next available transaction ID
-    func getNextTransactionId() throws -> Int {
-        // First check local database
-        let localMaxSql = "SELECT MAX(htrn) FROM TRN"
-        var statement: OpaquePointer?
-        
-        var localMax = 0
-        if sqlite3_prepare_v2(db, localMaxSql, -1, &statement, nil) == SQLITE_OK {
-            if sqlite3_step(statement) == SQLITE_ROW {
-                localMax = Int(sqlite3_column_int(statement, 0))
-            }
-            sqlite3_finalize(statement)
-        }
-        
-        // Also check the Money file for max ID
-        var fileMax = 0
-        do {
-            let url = try MoneyFileService.ensureLocalFile()
-            let password = (try? PasswordStore.shared.load()) ?? ""
-            let decryptedPath = try MoneyDecryptorBridge.decryptToTempFile(fromFile: url.path, password: password)
-            let parser = MoneyFileParser(filePath: decryptedPath)
-            let transactions = try parser.parseTransactions()
-            fileMax = transactions.map { $0.id }.max() ?? 0
-        } catch {
-            #if DEBUG
-            print("[LocalDatabaseManager] Could not read Money file max ID: \(error)")
-            #endif
-        }
-        
-        let nextId = max(localMax, fileMax) + 1
-        
-        #if DEBUG
-        print("[LocalDatabaseManager] Next transaction ID: \(nextId) (local max: \(localMax), file max: \(fileMax))")
-        #endif
-        
-        return nextId
-    }
-    
     // MARK: - Payee Operations
     
     /// Insert a new payee into local database
     func insertPayee(_ payee: LocalPayee) throws {
+        #if DEBUG
+        print("[LocalDatabaseManager] insertPayee called:")
+        print("  hpay: \(payee.hpay)")
+        print("  szFull: '\(payee.szFull)'")
+        print("  szFull.isEmpty: \(payee.szFull.isEmpty)")
+        print("  szFull.count: \(payee.szFull.count)")
+        #endif
+        
         let sql = """
         INSERT INTO PAY (
             hpay, hpayParent, haddr, mComment, fHidden, szAls, szFull, mAcctNum,
@@ -496,7 +538,17 @@ class LocalDatabaseManager {
         bindTextOrNull(statement, 4, payee.mComment)
         sqlite3_bind_int(statement, 5, payee.fHidden ? 1 : 0)
         bindTextOrNull(statement, 6, payee.szAls)
-        sqlite3_bind_text(statement, 7, payee.szFull, -1, nil)
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] About to bind szFull at parameter 7: '\(payee.szFull)'")
+        #endif
+        
+        bindText(statement, 7, payee.szFull)
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] szFull bound successfully")
+        #endif
+        
         bindTextOrNull(statement, 8, payee.mAcctNum)
         bindTextOrNull(statement, 9, payee.mBankId)
         bindTextOrNull(statement, 10, payee.mBranchId)
@@ -519,17 +571,17 @@ class LocalDatabaseManager {
         sqlite3_bind_int(statement, 27, payee.fCust ? 1 : 0)
         // rgbEntryId (BLOB) - skip for now
         sqlite3_bind_null(statement, 28)
-        sqlite3_bind_text(statement, 29, payee.dtLastModified, -1, nil)
+        bindText(statement, 29, payee.dtLastModified)
         sqlite3_bind_int(statement, 30, Int32(payee.lContactData))
         sqlite3_bind_int(statement, 31, Int32(payee.shippref))
         sqlite3_bind_int(statement, 32, payee.fNoRecurringBill ? 1 : 0)
-        sqlite3_bind_text(statement, 33, payee.dtSerial, -1, nil)
+        bindText(statement, 33, payee.dtSerial)
         sqlite3_bind_int(statement, 34, Int32(payee.grfcontt))
         sqlite3_bind_int(statement, 35, payee.fAutofillMemo ? 1 : 0)
         bindTextOrNull(statement, 36, payee.dtLast)
         // rgbMemos (BLOB) - skip for now
         sqlite3_bind_null(statement, 37)
-        sqlite3_bind_text(statement, 38, payee.sguid, -1, nil)
+        bindText(statement, 38, payee.sguid)
         sqlite3_bind_int(statement, 39, payee.fUpdated ? 1 : 0)
         sqlite3_bind_int(statement, 40, payee.fGlobal ? 1 : 0)
         sqlite3_bind_int(statement, 41, payee.fLocal ? 1 : 0)
@@ -625,14 +677,29 @@ class LocalDatabaseManager {
         var payees: [LocalPayee] = []
         
         while sqlite3_step(statement) == SQLITE_ROW {
+            let hpay = Int(sqlite3_column_int(statement, 0))
+            let szFull = columnString(statement, 6) ?? ""
+            let dtLastModified = columnString(statement, 27) ?? ""
+            let dtSerial = columnString(statement, 31) ?? ""
+            let sguid = columnString(statement, 35) ?? ""
+            
+            #if DEBUG
+            print("[getUnsyncedPayees] Reading payee from SQLite:")
+            print("  hpay: \(hpay)")
+            print("  szFull (col 6): '\(szFull)'")
+            print("  dtLastModified (col 27): '\(dtLastModified)'")
+            print("  dtSerial (col 31): '\(dtSerial)'")
+            print("  sguid (col 35): '\(sguid)'")
+            #endif
+            
             let payee = LocalPayee(
-                hpay: Int(sqlite3_column_int(statement, 0)),
+                hpay: hpay,
                 hpayParent: columnIntOrNil(statement, 1),
                 haddr: columnIntOrNil(statement, 2),
                 mComment: columnString(statement, 3),
                 fHidden: sqlite3_column_int(statement, 4) != 0,
                 szAls: columnString(statement, 5),
-                szFull: columnString(statement, 6) ?? "",
+                szFull: szFull,
                 mAcctNum: columnString(statement, 7),
                 mBankId: columnString(statement, 8),
                 mBranchId: columnString(statement, 9),
@@ -653,15 +720,15 @@ class LocalDatabaseManager {
                 dRateTax: sqlite3_column_double(statement, 24),
                 fVendor: sqlite3_column_int(statement, 25) != 0,
                 fCust: sqlite3_column_int(statement, 26) != 0,
-                dtLastModified: columnString(statement, 27) ?? "",
+                dtLastModified: dtLastModified,
                 lContactData: Int(sqlite3_column_int(statement, 28)),
                 shippref: Int(sqlite3_column_int(statement, 29)),
                 fNoRecurringBill: sqlite3_column_int(statement, 30) != 0,
-                dtSerial: columnString(statement, 31) ?? "",
+                dtSerial: dtSerial,
                 grfcontt: Int(sqlite3_column_int(statement, 32)),
                 fAutofillMemo: sqlite3_column_int(statement, 33) != 0,
                 dtLast: columnString(statement, 34),
-                sguid: columnString(statement, 35) ?? "",
+                sguid: sguid,
                 fUpdated: sqlite3_column_int(statement, 36) != 0,
                 fGlobal: sqlite3_column_int(statement, 37) != 0,
                 fLocal: sqlite3_column_int(statement, 38) != 0
@@ -692,6 +759,16 @@ class LocalDatabaseManager {
         #endif
     }
     
+    /// Clear ALL payee records (for testing/debugging)
+    func clearAllPayees() throws {
+        let sql = "DELETE FROM PAY"
+        try execute(sql)
+        
+        #if DEBUG
+        print("[LocalDatabaseManager] ✅ Cleared ALL payee records from local database")
+        #endif
+    }
+    
     /// Mark records as synced
     func markRecordsAsSynced() throws {
         // Mark all transactions as synced
@@ -714,6 +791,15 @@ class LocalDatabaseManager {
             return nil
         }
         return String(cString: cString)
+    }
+    
+    // MARK: - Helper Methods for Binding Values
+    
+    private func bindText(_ statement: OpaquePointer?, _ index: Int32, _ value: String) {
+        value.withCString { cString in
+            // SQLITE_TRANSIENT = -1 (tells SQLite to make its own copy)
+            sqlite3_bind_text(statement, index, cString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        }
     }
     
     private func columnIntOrNil(_ statement: OpaquePointer?, _ index: Int32) -> Int? {

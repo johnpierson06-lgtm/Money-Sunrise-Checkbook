@@ -79,6 +79,56 @@ struct MoneyFileParser {
     
     // MARK: - Transaction Parsing
     
+    /// Get the maximum transaction ID from the TRN table
+    /// This is used to generate sequential IDs for new transactions
+    func getMaxTransactionId() throws -> Int {
+        do {
+            // Read all transactions and find the max ID
+            let rows = try parser.readTable("TRN")
+            
+            var maxId = 0
+            for row in rows {
+                if let htrnStr = row["htrn"],
+                   let htrn = Int(htrnStr) {
+                    maxId = max(maxId, htrn)
+                }
+            }
+            
+            #if DEBUG
+            print("[MoneyFileParser] Max transaction ID: \(maxId)")
+            #endif
+            
+            return maxId
+        } catch {
+            throw ParseError.tableReadError(error)
+        }
+    }
+    
+    /// Get the maximum payee ID from the PAY table
+    /// This is used to generate sequential IDs for new payees
+    func getMaxPayeeId() throws -> Int {
+        do {
+            // Read all payees and find the max ID
+            let rows = try parser.readTable("PAY")
+            
+            var maxId = 0
+            for row in rows {
+                if let hpayStr = row["hpay"],
+                   let hpay = Int(hpayStr) {
+                    maxId = max(maxId, hpay)
+                }
+            }
+            
+            #if DEBUG
+            print("[MoneyFileParser] Max payee ID: \(maxId)")
+            #endif
+            
+            return maxId
+        } catch {
+            throw ParseError.tableReadError(error)
+        }
+    }
+    
     /// Parse transactions from the TRN table
     /// Column mapping:
     /// - htrn: unique transaction identifier (Int)

@@ -237,54 +237,39 @@ struct SyncView: View {
         successMessage = nil
         syncProgress = "Preparing to sync..."
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task {
             do {
-                // Step 1: Get the local Money file
-                updateProgress("Getting local Money file...")
-                let localFileURL = try MoneyFileService.ensureLocalFile()
-                
-                // Step 2: Create a copy for modification (the .mny file, not .mdb)
-                updateProgress("Creating working copy...")
-                let tempMnyURL = try createWorkingCopy(from: localFileURL)
-                
-                // Step 3: Get password
-                let password = (try? PasswordStore.shared.load()) ?? ""
-                
-                // Step 4: Get unsynced data
-                updateProgress("Reading unsynced data...")
+                // Get unsynced counts before sync
                 let transactions = try LocalDatabaseManager.shared.getUnsyncedTransactions()
                 let payees = try LocalDatabaseManager.shared.getUnsyncedPayees()
+                let totalCount = transactions.count + payees.count
                 
                 #if DEBUG
-                print("[SyncView] Syncing \(transactions.count) transactions and \(payees.count) payees")
+                print("[SyncView] Starting sync for \(transactions.count) transactions and \(payees.count) payees")
                 #endif
                 
-                // Step 5: Insert payees first (transactions may reference them)
-                if !payees.isEmpty {
-                    updateProgress("Syncing \(payees.count) payee(s)...")
-                    try insertPayees(payees, into: tempMnyURL, password: password)
+                // Update progress
+                await MainActor.run {
+                    syncProgress = "Decrypting Money file..."
                 }
                 
-                // Step 6: Insert transactions
-                if !transactions.isEmpty {
-                    updateProgress("Syncing \(transactions.count) transaction(s)...")
-                    try insertTransactions(transactions, into: tempMnyURL, password: password)
-                }
-                
-                // Step 7: Upload to OneDrive with timestamped name
-                updateProgress("Uploading to OneDrive...")
-                try uploadToOneDrive(tempMnyURL)
-                
-                // Step 8: Mark records as synced, then clear them
-                updateProgress("Clearing local records...")
-                try LocalDatabaseManager.shared.markRecordsAsSynced()
-                try LocalDatabaseManager.shared.clearSyncedRecords()
+                // Use the new SyncService with mdb-tools
+                try await SyncService.shared.syncToMoneyFile()
                 
                 // Success!
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isSyncing = false
                     self.syncProgress = ""
-                    self.successMessage = "Successfully synced \(transactions.count + payees.count) record(s) to OneDrive!"
+                    self.successMessage = """
+                    Successfully synced \(totalCount) record(s) to OneDrive!
+                    
+                    ⚠️ IMPORTANT: To see transactions in Money:
+                    1. Open file in Money Desktop
+                    2. Go to File → Database Maintenance
+                    3. Click "Validate and Repair"
+                    
+                    This rebuilds indexes so Money can see new data.
+                    """
                     self.unsyncedTransactionCount = 0
                     self.unsyncedPayeeCount = 0
                     
@@ -292,13 +277,20 @@ struct SyncView: View {
                     print("[SyncView] ✅ Sync completed successfully")
                     #endif
                     
-                    // Auto-dismiss after 2 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        dismiss()
-                    }
+                    // Don't auto-dismiss - let user read the message
+                }
+            } catch SyncService.SyncError.noUnsyncedData {
+                await MainActor.run {
+                    self.isSyncing = false
+                    self.syncProgress = ""
+                    self.errorMessage = "No unsynced data to upload"
+                    
+                    #if DEBUG
+                    print("[SyncView] ℹ️ No unsynced data")
+                    #endif
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isSyncing = false
                     self.syncProgress = ""
                     self.errorMessage = "Sync failed: \(error.localizedDescription)"
@@ -311,103 +303,7 @@ struct SyncView: View {
         }
     }
     
-    private func updateProgress(_ message: String) {
-        DispatchQueue.main.async {
-            self.syncProgress = message
-            
-            #if DEBUG
-            print("[SyncView] 📝 \(message)")
-            #endif
-        }
-    }
-    
-    private func createWorkingCopy(from url: URL) throws -> URL {
-        let tempDir = FileManager.default.temporaryDirectory
-        let timestamp = DateFormatter.yyyyMMddHHmmss.string(from: Date())
-        let workingCopyURL = tempDir.appendingPathComponent("Money_Working_\(timestamp).mny")
-        
-        // Copy the file
-        try FileManager.default.copyItem(at: url, to: workingCopyURL)
-        
-        #if DEBUG
-        print("[SyncView] Created working copy: \(workingCopyURL.path)")
-        #endif
-        
-        return workingCopyURL
-    }
-    
-    private func insertPayees(_ payees: [LocalPayee], into fileURL: URL, password: String) throws {
-        for payee in payees {
-            updateProgress("Inserting payee: \(payee.szFull)...")
-            try JackcessBridge.insertPayee(payee, into: fileURL, password: password)
-        }
-    }
-    
-    private func insertTransactions(_ transactions: [LocalTransaction], into fileURL: URL, password: String) throws {
-        for transaction in transactions {
-            updateProgress("Inserting transaction #\(transaction.htrn)...")
-            try JackcessBridge.insertTransaction(transaction, into: fileURL, password: password)
-        }
-    }
-    
-    private func uploadToOneDrive(_ fileURL: URL) throws {
-        let timestamp = DateFormatter.yyyyMMddHHmmss.string(from: Date())
-        let uploadFileName = "Money_Test_\(timestamp).mny"
-        
-        // Get parent folder ID from saved file info
-        guard let parentFolderId = OneDriveFileManager.shared.getSavedParentFolderId() else {
-            throw SyncError.noParentFolder
-        }
-        
-        // Get access token
-        let semaphore = DispatchSemaphore(value: 0)
-        var uploadError: Error?
-        var uploadSuccess = false
-        
-        AuthManager.shared.acquireTokenSilent(scopes: ["Files.ReadWrite"]) { token, error in
-            if let error = error {
-                uploadError = error
-                semaphore.signal()
-                return
-            }
-            
-            guard let token = token else {
-                uploadError = SyncError.noAccessToken
-                semaphore.signal()
-                return
-            }
-            
-            // Upload file
-            OneDriveAPI.uploadFile(
-                accessToken: token,
-                fileURL: fileURL,
-                fileName: uploadFileName,
-                parentFolderId: parentFolderId
-            ) { result in
-                switch result {
-                case .success:
-                    uploadSuccess = true
-                case .failure(let error):
-                    uploadError = error
-                }
-                semaphore.signal()
-            }
-        }
-        
-        semaphore.wait()
-        
-        if let error = uploadError {
-            throw error
-        }
-        
-        if !uploadSuccess {
-            throw SyncError.uploadFailed
-        }
-        
-        #if DEBUG
-        print("[SyncView] ✅ Uploaded to OneDrive: \(uploadFileName)")
-        #endif
-    }
+
 }
 
 // MARK: - Supporting Views
