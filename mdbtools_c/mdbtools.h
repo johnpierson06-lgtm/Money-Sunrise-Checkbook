@@ -638,6 +638,7 @@ void mdb_put_int32_msb(void *buf, guint32 offset, guint32 value);
 int mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fields);
 guint16 mdb_add_row_to_pg(MdbTableDef *table, unsigned char *row_buffer, int new_row_size);
 int mdb_update_index(MdbTableDef *table, MdbIndex *idx, unsigned int num_fields, MdbField *fields, guint32 pgnum, guint16 rownum);
+int mdb_update_indexes(MdbTableDef *table, int num_fields, MdbField *fields, guint32 pgnum, guint16 rownum);
 int mdb_insert_row(MdbTableDef *table, int num_fields, MdbField *fields);
 int mdb_pack_row(MdbTableDef *table, unsigned char *row_buffer, unsigned int num_fields, MdbField *fields);
 int mdb_replace_row(MdbTableDef *table, int row, void *new_row, int new_row_size);

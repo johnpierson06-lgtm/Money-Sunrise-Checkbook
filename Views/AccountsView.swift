@@ -98,6 +98,14 @@ struct AccountsView: View {
             }
             .navigationTitle("Accounts")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    if hasLRDFile {
+                        Text("(Read Only)")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarLeading) {
                     Menu {
                         Button(role: .destructive) {
@@ -118,8 +126,20 @@ struct AccountsView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
-                        NavigationLink(destination: SyncView().environmentObject(coordinator)) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
+                        if hasLRDFile {
+                            // Show disabled sync button with tooltip
+                            Button {
+                                // No action - disabled
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(true)
+                            .foregroundColor(.gray)
+                            .help("Sync is disabled because the file may be open on another device")
+                        } else {
+                            NavigationLink(destination: SyncView().environmentObject(coordinator)) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
                         }
                         
                         Button("Refresh") {
