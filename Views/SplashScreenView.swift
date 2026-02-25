@@ -16,6 +16,7 @@ struct SplashScreenView: View {
     enum NavigationDestination {
         case login
         case fileSelection
+        case timezoneSelection
         case accounts
     }
     
@@ -71,9 +72,22 @@ struct SplashScreenView: View {
             
         case .fileSelection:
             EnhancedFileSelectionView { hasLRD, readOnly in
-                // File selected, update flags and navigate to accounts
+                // File selected, check if timezone is configured
                 hasLRDFile = hasLRD
                 isReadOnly = readOnly
+                
+                if TimezoneManager.shared.isTimezoneConfigured() {
+                    // Timezone already set, go directly to accounts
+                    navigationDestination = .accounts
+                } else {
+                    // First time opening this file - prompt for timezone
+                    navigationDestination = .timezoneSelection
+                }
+            }
+            
+        case .timezoneSelection:
+            TimezoneSelectionView {
+                // Timezone selected, now go to accounts
                 navigationDestination = .accounts
             }
             

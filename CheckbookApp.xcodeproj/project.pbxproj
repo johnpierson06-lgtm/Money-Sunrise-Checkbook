@@ -147,6 +147,9 @@
 				NewTransactionView.swift,
 				SplashScreenView.swift,
 				SyncView.swift,
+				TIMEZONE_IMPLEMENTATION_SUMMARY.md,
+				TimezoneManager.swift,
+				TimezoneSelectionView.swift,
 				TransactionsView.swift,
 				ViewControllerResolver.swift,
 			);

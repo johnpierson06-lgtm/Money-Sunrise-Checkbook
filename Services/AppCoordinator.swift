@@ -29,6 +29,10 @@ class AppCoordinator: ObservableObject {
             print("[AppCoordinator] ⚠️ Error clearing password: \(error.localizedDescription)")
         }
         
+        // Clear timezone settings
+        TimezoneManager.shared.clearTimezone()
+        print("[AppCoordinator] 🌍 Timezone settings cleared")
+        
         // Signal that we need to restart
         shouldClearFile = true
         shouldRestart = true
@@ -55,6 +59,10 @@ class AppCoordinator: ObservableObject {
         } catch {
             print("[AppCoordinator] ⚠️ Error clearing password: \(error.localizedDescription)")
         }
+        
+        // Clear timezone settings
+        TimezoneManager.shared.clearTimezone()
+        print("[AppCoordinator] 🌍 Timezone settings cleared")
         
         // Signal restart
         shouldSignOut = true

@@ -373,11 +373,11 @@ class MDBToolsWriter {
                 
             case "dt", "dtSent", "dtCleared", "dtPost", "dtSerial", "dtCloseOffYear", "dtOldRel":
                 let dateStr = getDateField(colName, from: t)
-                // CRITICAL: For dt and dtSerial, subtract 7 hours to handle timezone offset
-                // The DateFormatter converts MST to UTC, adding 7 hours
-                // We need to compensate by subtracting 7 hours BEFORE conversion
+                // CRITICAL: For dt and dtSerial, apply timezone offset to handle local time
+                // The DateFormatter converts to the configured timezone
+                // We need to apply offset adjustment for these fields
                 let needsTimezoneAdjustment = (colName == "dt" || colName == "dtSerial")
-                fields[i].value = allocOleDate(dateStr, subtractSevenHours: needsTimezoneAdjustment)
+                fields[i].value = allocOleDate(dateStr, applyTimezoneOffset: needsTimezoneAdjustment)
                 fields[i].siz = Int32(8)
                 fields[i].is_null = 0
                 
@@ -660,29 +660,29 @@ class MDBToolsWriter {
                     fields[i].is_null = 1
                 }
                 
-            // Date fields: Use OLE date format with 7-hour timezone subtraction
+            // Date fields: Use OLE date format with timezone offset adjustment
             case "dtCCExp":
                 if let dateStr = p.dtCCExp {
-                    // For dtCCExp, subtract 7 hours to compensate for timezone
-                    fields[i].value = allocOleDate(dateStr, subtractSevenHours: true)
+                    // For dtCCExp, apply timezone offset
+                    fields[i].value = allocOleDate(dateStr, applyTimezoneOffset: true)
                     fields[i].siz = Int32(8)
                     fields[i].is_null = 0
                 } else {
                     // NULL date - use the hardcoded "Mon Feb 28 00:00:00 MST 10000" value
-                    fields[i].value = allocOleDate("NULL_10000", subtractSevenHours: true)
+                    fields[i].value = allocOleDate("NULL_10000", applyTimezoneOffset: true)
                     fields[i].siz = Int32(8)
                     fields[i].is_null = 0
                 }
                 
             case "dtLastModified":
-                // Always set, subtract 7 hours for timezone
-                fields[i].value = allocOleDate(p.dtLastModified, subtractSevenHours: true)
+                // Always set, apply timezone offset
+                fields[i].value = allocOleDate(p.dtLastModified, applyTimezoneOffset: true)
                 fields[i].siz = Int32(8)
                 fields[i].is_null = 0
                 
             case "dtSerial":
-                // Always set, subtract 7 hours for timezone
-                fields[i].value = allocOleDate(p.dtSerial, subtractSevenHours: true)
+                // Always set, apply timezone offset
+                fields[i].value = allocOleDate(p.dtSerial, applyTimezoneOffset: true)
                 fields[i].siz = Int32(8)
                 fields[i].is_null = 0
                 
@@ -690,12 +690,12 @@ class MDBToolsWriter {
                 // dtLast should be the current timestamp (same as dtLastModified/dtSerial)
                 // Not the far-future NULL date
                 if let dateStr = p.dtLast {
-                    fields[i].value = allocOleDate(dateStr, subtractSevenHours: true)
+                    fields[i].value = allocOleDate(dateStr, applyTimezoneOffset: true)
                     fields[i].siz = Int32(8)
                     fields[i].is_null = 0
                 } else {
                     // Use current timestamp (same as dtLastModified)
-                    fields[i].value = allocOleDate(p.dtLastModified, subtractSevenHours: true)
+                    fields[i].value = allocOleDate(p.dtLastModified, applyTimezoneOffset: true)
                     fields[i].siz = Int32(8)
                     fields[i].is_null = 0
                 }
@@ -865,20 +865,52 @@ class MDBToolsWriter {
         return ptr
     }
     
-    private func allocOleDate(_ dateString: String, subtractSevenHours: Bool = false) -> UnsafeMutableRawPointer {
+    private func allocOleDate(_ dateString: String, applyTimezoneOffset: Bool = false) -> UnsafeMutableRawPointer {
         let ptr = malloc(8)!
         
         // Check for empty string or NULL marker
         if dateString.isEmpty || dateString.hasPrefix("NULL") || dateString.contains("_10000") {
-            // NULL date: Write value 7 hours earlier to compensate for Java reader adding 7 hours
-            let nullDateMinus7Hours: Double = 2958524.0
-            ptr.assumingMemoryBound(to: Double.self).pointee = nullDateMinus7Hours
+            // NULL date: Calculate based on user's timezone offset
+            do {
+                let nullDate = try TimezoneManager.shared.calculateNullDate()
+                ptr.assumingMemoryBound(to: Double.self).pointee = nullDate
+                
+                #if DEBUG
+                let offset = try? TimezoneManager.shared.requireTimezoneOffset()
+                print("[MDBToolsWriter] Using NULL date with offset \(offset ?? 0): \(nullDate)")
+                #endif
+            } catch {
+                #if DEBUG
+                print("[MDBToolsWriter] ❌ ERROR: Timezone not configured! Cannot calculate NULL date.")
+                #endif
+                fatalError("Timezone offset must be configured before writing dates to Money file")
+            }
             return ptr
+        }
+        
+        // Get the timezone offset
+        let timezoneOffsetHours: Int
+        do {
+            timezoneOffsetHours = try TimezoneManager.shared.requireTimezoneOffset()
+        } catch {
+            #if DEBUG
+            print("[MDBToolsWriter] ❌ ERROR: Timezone not configured!")
+            #endif
+            fatalError("Timezone offset must be configured before writing dates to Money file")
         }
         
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd/yy HH:mm:ss"
-        formatter.timeZone = TimeZone(identifier: "America/Denver") ?? TimeZone(secondsFromGMT: -25200)  // MST
+        
+        // Create timezone from offset (negative offset = west of UTC)
+        let secondsOffset = timezoneOffsetHours * 3600
+        formatter.timeZone = TimeZone(secondsFromGMT: secondsOffset)
+        
+        #if DEBUG
+        if applyTimezoneOffset {
+            print("[MDBToolsWriter] Using timezone offset: \(timezoneOffsetHours) hours (UTC\(timezoneOffsetHours >= 0 ? "+" : "")\(timezoneOffsetHours))")
+        }
+        #endif
         
         // Set default date for 2-digit years to interpret correctly
         let calendar = Calendar.current
@@ -894,9 +926,13 @@ class MDBToolsWriter {
             let unixTimestamp = date.timeIntervalSince1970
             var days = (unixTimestamp / 86400.0) + oleEpochOffset
             
-            // Subtract 7 hours to compensate for timezone if requested
-            if subtractSevenHours {
-                days -= (7.0 / 24.0)  // Subtract 7 hours = 0.2916666667 days
+            // Apply timezone offset if requested
+            if applyTimezoneOffset {
+                // Subtract the absolute value of offset hours
+                // For UTC-7 (MST), timezoneOffsetHours = -7, we subtract 7 hours
+                // For UTC+1 (CET), timezoneOffsetHours = +1, we subtract -1 hours (i.e., add 1)
+                let hoursToSubtract = Double(abs(timezoneOffsetHours))
+                days -= (hoursToSubtract / 24.0)
             }
             
             ptr.assumingMemoryBound(to: Double.self).pointee = days
