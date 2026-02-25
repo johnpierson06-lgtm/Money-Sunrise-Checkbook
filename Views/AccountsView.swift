@@ -7,6 +7,7 @@ struct UIAccount: Identifiable, Hashable {
     let openingBalance: Decimal
     var currentBalance: Decimal
     var hasUnsyncedTransactions: Bool = false
+    var isFavorite: Bool = false
 }
 
 struct AccountsView: View {
@@ -23,6 +24,12 @@ struct AccountsView: View {
     @State private var isProcessingPassword = false
     @State private var presenterVC: UIViewController? = nil
     @State private var passwordErrorMessage: String? = nil  // Track password errors
+    @State private var showFavoritesOnly = false  // Toggle for favorites filter
+
+    var filteredAccounts: [UIAccount] {
+        let filtered = showFavoritesOnly ? accounts.filter { $0.isFavorite } : accounts
+        return filtered.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
 
     var body: some View {
         NavigationStack {
@@ -66,33 +73,60 @@ struct AccountsView: View {
                         .buttonStyle(.borderedProminent)
                     }
                     .padding()
+                } else if filteredAccounts.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "star.slash")
+                            .font(.system(size: 60))
+                            .foregroundColor(.secondary)
+                        Text("No Favorite Accounts")
+                            .font(.headline)
+                        Text("You haven't marked any accounts as favorites yet")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
                 } else {
-                    List(accounts) { account in
-                        NavigationLink(destination: TransactionsView(account: account)) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(account.name)
-                                    
-                                    if account.hasUnsyncedTransactions {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .font(.caption2)
-                                            Text("includes unsynced transactions")
-                                                .font(.caption2)
+                    VStack(spacing: 0) {
+                        // Filter toggle
+                        Picker("View", selection: $showFavoritesOnly) {
+                            Text("Show All").tag(false)
+                            Text("Show Favorites").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        
+                        List(filteredAccounts) { account in
+                            NavigationLink(destination: TransactionsView(account: account)) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(account.name)
+                                        
+                                        if account.hasUnsyncedTransactions {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "exclamationmark.triangle.fill")
+                                                    .font(.caption2)
+                                                Text("includes unsynced transactions")
+                                                    .font(.caption2)
+                                            }
+                                            .foregroundColor(.orange)
                                         }
-                                        .foregroundColor(.orange)
                                     }
+                                    
+                                    Spacer()
+                                    
+                                    Text(NSDecimalNumber(decimal: account.currentBalance).doubleValue, format: .currency(code: Locale.current.currencyCode ?? "USD"))
+                                        .foregroundColor(
+                                            account.currentBalance < 0 ? .red :
+                                            account.hasUnsyncedTransactions ? .orange : .primary
+                                        )
                                 }
-                                
-                                Spacer()
-                                
-                                Text(NSDecimalNumber(decimal: account.currentBalance).doubleValue, format: .currency(code: Locale.current.currencyCode ?? "USD"))
-                                    .foregroundColor(account.hasUnsyncedTransactions ? .orange : .primary)
                             }
                         }
-                    }
-                    .refreshable {
-                        await refreshAccountsAsync()
+                        .refreshable {
+                            await refreshAccountsAsync()
+                        }
                     }
                 }
             }
@@ -239,7 +273,8 @@ struct AccountsView: View {
                                 name: s.name,
                                 openingBalance: s.beginningBalance,
                                 currentBalance: s.currentBalance,
-                                hasUnsyncedTransactions: s.hasUnsyncedTransactions
+                                hasUnsyncedTransactions: s.hasUnsyncedTransactions,
+                                isFavorite: s.isFavorite
                             )
                         }
                         
@@ -368,7 +403,8 @@ struct AccountsView: View {
                         name: s.name,
                         openingBalance: s.beginningBalance,
                         currentBalance: s.currentBalance,
-                        hasUnsyncedTransactions: s.hasUnsyncedTransactions
+                        hasUnsyncedTransactions: s.hasUnsyncedTransactions,
+                        isFavorite: s.isFavorite
                     )
                 }
                 

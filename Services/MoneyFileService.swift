@@ -217,7 +217,7 @@ public enum MoneyFileService {
                 name: account.name,
                 beginningBalance: account.beginningBalance,
                 currentBalance: accountBalances[account.id] ?? account.beginningBalance,
-                isFavorite: false  // TODO: Read from ACCT.fFavorite
+                isFavorite: account.isFavorite
             )
         }
         
@@ -266,7 +266,17 @@ public enum MoneyFileService {
                     beginningBalance = 0
                 }
                 
-                accounts.append(MoneyAccount(id: id, name: name, beginningBalance: beginningBalance))
+                // Read fFavorite field
+                let isFavorite: Bool
+                if let fav = row["fFavorite"] as? Int {
+                    isFavorite = (fav != 0)
+                } else if let fav = row["fFavorite"] as? Bool {
+                    isFavorite = fav
+                } else {
+                    isFavorite = false
+                }
+                
+                accounts.append(MoneyAccount(id: id, name: name, beginningBalance: beginningBalance, isFavorite: isFavorite))
             }
             
             return accounts
@@ -366,7 +376,17 @@ struct MDBParser {
                 beginningBalance = 0
             }
             
-            accounts.append(MoneyAccount(id: id, name: name, beginningBalance: beginningBalance))
+            // Read fFavorite field
+            let isFavorite: Bool
+            if let fav = row["fFavorite"] as? Int {
+                isFavorite = (fav != 0)
+            } else if let fav = row["fFavorite"] as? Bool {
+                isFavorite = fav
+            } else {
+                isFavorite = false
+            }
+            
+            accounts.append(MoneyAccount(id: id, name: name, beginningBalance: beginningBalance, isFavorite: isFavorite))
         }
         
         print("[MDBParser] Parsed \(accounts.count) accounts")

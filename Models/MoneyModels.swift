@@ -13,11 +13,13 @@ public struct MoneyAccount: Identifiable, Hashable, Codable, Sendable {
     public let id: Int              // Maps to: hacct
     public let name: String          // Maps to: szFull
     public let beginningBalance: Decimal  // Maps to: amtOpen
+    public let isFavorite: Bool      // Maps to: fFavorite
 
-    public init(id: Int, name: String, beginningBalance: Decimal) {
+    public init(id: Int, name: String, beginningBalance: Decimal, isFavorite: Bool = false) {
         self.id = id
         self.name = name
         self.beginningBalance = beginningBalance
+        self.isFavorite = isFavorite
     }
 }
 

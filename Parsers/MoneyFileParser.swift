@@ -67,10 +67,28 @@ struct MoneyFileParser {
                 balance = 0
             }
             
+            // Extract fFavorite (favorite status)
+            // In Money files, fFavorite is typically stored as an integer (0 or 1)
+            let isFavorite: Bool
+            if let fFavoriteStr = row["fFavorite"],
+               !fFavoriteStr.isEmpty,
+               let fav = Int(fFavoriteStr) {
+                isFavorite = (fav != 0)  // Any non-zero value means favorite
+            } else {
+                isFavorite = false
+            }
+            
+            #if DEBUG
+            if isFavorite {
+                print("[MoneyFileParser] Account '\(szFull)' (ID: \(hacct)) is marked as favorite (fFavorite=\(row["fFavorite"] ?? "nil"))")
+            }
+            #endif
+            
             accounts.append(MoneyAccount(
                 id: hacct,
                 name: szFull,
-                beginningBalance: balance
+                beginningBalance: balance,
+                isFavorite: isFavorite
             ))
         }
         
