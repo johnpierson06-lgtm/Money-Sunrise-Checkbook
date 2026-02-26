@@ -308,8 +308,13 @@ struct NewTransactionView: View {
             do {
                 print("💾 Creating transaction...")
                 
-                // Use temporary ID - will be assigned real htrn during sync
-                let tempId = 0  // SQLite will auto-increment
+                // Use temporary ID - use negative value to ensure uniqueness
+                // During sync, this will be replaced with real htrn from Money file
+                // Use lower 30 bits of millisecond timestamp to fit in Int32
+                let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+                let tempId = -(timestamp & 0x3FFFFFFF)  // Negative, fits in Int32
+                
+                print("📋 Generated temp ID: \(tempId)")
                 
                 // Determine if amount should be negative (expense) or positive (income)
                 let finalAmount = categoryWithType.isExpense ? -abs(amountDecimal) : abs(amountDecimal)
@@ -328,7 +333,14 @@ struct NewTransactionView: View {
                     isTransfer: false
                 )
                 
-                print("📝 Transaction created with temp ID, Account=\(account.id), Amount=\(finalAmount)")
+                print("📝 Transaction created with:")
+                print("   temp ID: \(transaction.htrn)")
+                print("   Account: \(transaction.hacct)")
+                print("   Amount: \(transaction.amt)")
+                print("   Category: \(transaction.hcat?.description ?? "nil")")
+                print("   Payee: \(transaction.lHpay?.description ?? "nil")")
+                print("   Date: \(transaction.dt)")
+                print("   Memo: \(transaction.mMemo ?? "nil")")
                 print("💾 About to insert into database...")
                 
                 // Save to local database

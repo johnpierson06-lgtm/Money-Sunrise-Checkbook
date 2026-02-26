@@ -417,22 +417,41 @@ class LocalDatabaseManager {
         var transactions: [LocalTransaction] = []
         
         while sqlite3_step(statement) == SQLITE_ROW {
+            let htrn = Int(sqlite3_column_int(statement, 0))
+            let hacct = Int(sqlite3_column_int(statement, 1))
+            let dt = columnString(statement, 3) ?? ""
+            let amt = Decimal(sqlite3_column_double(statement, 9))
+            let hcat = columnIntOrNil(statement, 11)
+            let mMemo = columnString(statement, 14)
+            let lHpay = columnIntOrNil(statement, 57)
+            
+            #if DEBUG
+            print("🔍 [SQLite READ] Row:")
+            print("   htrn: \(htrn)")
+            print("   hacct: \(hacct)")
+            print("   dt: '\(dt)'")
+            print("   amt: \(amt)")
+            print("   hcat: \(hcat?.description ?? "nil")")
+            print("   mMemo: '\(mMemo ?? "nil")'")
+            print("   lHpay: \(lHpay?.description ?? "nil")")
+            #endif
+            
             let transaction = LocalTransaction(
-                htrn: Int(sqlite3_column_int(statement, 0)),
-                hacct: Int(sqlite3_column_int(statement, 1)),
+                htrn: htrn,
+                hacct: hacct,
                 hacctLink: columnString(statement, 2),
-                dt: columnString(statement, 3) ?? "",
+                dt: dt,
                 dtSent: columnString(statement, 4) ?? "",
                 dtCleared: columnString(statement, 5) ?? "",
                 dtPost: columnString(statement, 6) ?? "",
                 cs: Int(sqlite3_column_int(statement, 7)),
                 hsec: columnString(statement, 8),
-                amt: Decimal(sqlite3_column_double(statement, 9)),
+                amt: amt,
                 szId: columnString(statement, 10),
-                hcat: columnIntOrNil(statement, 11),
+                hcat: hcat,
                 frq: Int(sqlite3_column_int(statement, 12)),
                 fDefPmt: Int(sqlite3_column_int(statement, 13)),
-                mMemo: columnString(statement, 14),
+                mMemo: mMemo,
                 oltt: Int(sqlite3_column_int(statement, 15)),
                 grfEntryMethods: Int(sqlite3_column_int(statement, 16)),
                 ps: Int(sqlite3_column_int(statement, 17)),
@@ -475,7 +494,7 @@ class LocalDatabaseManager {
                 amtPreRecUser: columnString(statement, 54),
                 hstmtRel: columnString(statement, 55),
                 dRateToBase: columnString(statement, 56),
-                lHpay: columnIntOrNil(statement, 57),
+                lHpay: lHpay,
                 sguid: columnString(statement, 58) ?? "",
                 szAggTrnId: columnString(statement, 59),
                 rgbDigest: columnString(statement, 60)

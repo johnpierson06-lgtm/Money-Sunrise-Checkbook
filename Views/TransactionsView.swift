@@ -173,7 +173,8 @@ struct TransactionsView: View {
                 
                 // Convert local transactions to TransactionDetail
                 // We'll create simplified MoneyTransaction objects for display
-                let localDetails = localFiltered.map { localTxn -> TransactionDetail in
+                var localDetails: [TransactionDetail] = []
+                for localTxn in localFiltered {
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "MM/dd/yy HH:mm:ss"
                     let date = dateFormatter.date(from: localTxn.dt) ?? Date()
@@ -181,7 +182,20 @@ struct TransactionsView: View {
                     let payeeName = localTxn.lHpay.flatMap { payeeLookup[$0]?.name }
                     let categoryName = localTxn.hcat.flatMap { categoryLookup[$0]?.name }
                     
-                    return TransactionDetail(
+                    #if DEBUG
+                    print("🔍 Converting LocalTransaction:")
+                    print("   htrn: \(localTxn.htrn)")
+                    print("   hacct: \(localTxn.hacct)")
+                    print("   dt: \(localTxn.dt)")
+                    print("   amt: \(localTxn.amt)")
+                    print("   lHpay: \(localTxn.lHpay?.description ?? "nil")")
+                    print("   payeeName: \(payeeName ?? "nil")")
+                    print("   hcat: \(localTxn.hcat?.description ?? "nil")")
+                    print("   categoryName: \(categoryName ?? "nil")")
+                    print("   mMemo: \(localTxn.mMemo ?? "nil")")
+                    #endif
+                    
+                    let detail = TransactionDetail(
                         id: localTxn.htrn,
                         date: date,
                         amount: localTxn.amt,
@@ -189,7 +203,11 @@ struct TransactionsView: View {
                         categoryName: categoryName,
                         memo: localTxn.mMemo
                     )
-                }.sorted { $0.date > $1.date }
+                    
+                    localDetails.append(detail)
+                }
+                
+                localDetails.sort { $0.date > $1.date }
                 
                 // Update UI on main thread
                 DispatchQueue.main.async {
