@@ -19,6 +19,7 @@ struct SyncView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var syncProgress: String = ""
+    @State private var isDirectMode: Bool = false  // false = Safe Mode, true = Direct Update
     
     var body: some View {
         NavigationStack {
@@ -119,6 +120,52 @@ struct SyncView: View {
                             .padding(.horizontal)
                         }
                         
+                        // Mode Toggle
+                        if !isLoading {
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("Sync Mode:")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                
+                                HStack(spacing: 0) {
+                                    // Safe Mode Button
+                                    Button {
+                                        isDirectMode = false
+                                    } label: {
+                                        Text("Safe Mode")
+                                            .font(.subheadline)
+                                            .fontWeight(isDirectMode ? .regular : .semibold)
+                                            .foregroundColor(isDirectMode ? .primary : .white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(isDirectMode ? Color.clear : Color.green)
+                                    }
+                                    
+                                    // Direct Update Button
+                                    Button {
+                                        isDirectMode = true
+                                    } label: {
+                                        Text("Direct Update")
+                                            .font(.subheadline)
+                                            .fontWeight(isDirectMode ? .semibold : .regular)
+                                            .foregroundColor(isDirectMode ? .white : .primary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(isDirectMode ? Color.orange : Color.clear)
+                                    }
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .padding(.horizontal)
+                        }
+                        
                         // Sync Button
                         if !isLoading {
                             Button {
@@ -147,10 +194,18 @@ struct SyncView: View {
                             Label("How Sync Works", systemImage: "info.circle.fill")
                                 .font(.headline)
                             
-                            VStack(alignment: .leading, spacing: 8) {
-                                SyncInfoRow(number: "1", text: "Transactions and payees are inserted into a temporary .mny file")
-                                SyncInfoRow(number: "2", text: "Local records are cleared from the SQLite database")
-                                SyncInfoRow(number: "3", text: "The file is uploaded to OneDrive as Money_Test_YYYYMMDD_hhmmss.mny")
+                            if isDirectMode {
+                                // Direct Update Mode
+                                VStack(alignment: .leading, spacing: 8) {
+                                    SyncInfoRow(number: "1", text: "In Direct Mode, the transactions and payees are inserted directly to your original file")
+                                    SyncInfoRow(number: "2", text: "Depending on your version of Money, you may need to goto 'File>Repair Money File>Quick File Repair' in order to see your transactions.")
+                                }
+                            } else {
+                                // Safe Mode
+                                VStack(alignment: .leading, spacing: 8) {
+                                    SyncInfoRow(number: "1", text: "In Safe Mode, new transactions and payees synchronized into a test file Money_Test_YYYYMMDD_hhmmss.mny")
+                                    SyncInfoRow(number: "2", text: "Depending on your version of Money, you may need to goto 'File>Repair Money File>Quick File Repair' in order to see your transactions.")
+                                }
                             }
                         }
                         .padding()
@@ -254,7 +309,7 @@ struct SyncView: View {
                 }
                 
                 // Use the new SyncService with mdb-tools
-                try await SyncService.shared.syncToMoneyFile()
+                try await SyncService.shared.syncToMoneyFile(directMode: isDirectMode)
                 
                 // Success!
                 await MainActor.run {

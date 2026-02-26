@@ -277,6 +277,31 @@ public final class OneDriveFileManager {
             }
         }
     }
+    
+    // MARK: - File Cleanup
+    
+    /// Delete the local copy of the Money file from Documents directory
+    /// This releases any file locks and forces a fresh download on next access
+    /// Useful after syncing to ensure we don't have stale or locked files
+    public func clearLocalFile() {
+        guard let localURL = localURLForSavedFile() else {
+            #if DEBUG
+            print("[OneDriveFileManager] No local file to clear")
+            #endif
+            return
+        }
+        
+        do {
+            try FileManager.default.removeItem(at: localURL)
+            #if DEBUG
+            print("[OneDriveFileManager] ✅ Cleared local file: \(localURL.path)")
+            #endif
+        } catch {
+            #if DEBUG
+            print("[OneDriveFileManager] ⚠️ Failed to clear local file: \(error.localizedDescription)")
+            #endif
+        }
+    }
 }
 extension OneDriveFileManagerError: LocalizedError {
     public var errorDescription: String? {

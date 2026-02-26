@@ -33,6 +33,8 @@ class SyncService {
     
     /// Sync all unsynced transactions and payees to Money file
     /// 
+    /// - Parameter directMode: If true, overwrite the original file. If false, upload as a test file with timestamp.
+    /// 
     /// CRITICAL ARCHITECTURE - Encryption Incompatibility:
     /// 
     /// Money .mny files use MSISAM RC4 encryption:
@@ -56,10 +58,18 @@ class SyncService {
     /// - Page 0: Header (never encrypted)
     /// - Pages 1-14: System catalog (MSISAM encrypted)
     /// - Pages 15+: Data pages (NOT encrypted in MSISAM!)
-    func syncToMoneyFile() async throws {
+    /// 
+    /// FILE HANDLING ARCHITECTURE:
+    /// - Create WORKING COPY in temp directory (don't modify Documents file)
+    /// - Modify the working copy
+    /// - Upload working copy to OneDrive
+    /// - Clean up working copy (release file handles)
+    /// - Delete local Documents file to force fresh download next time
+    func syncToMoneyFile(directMode: Bool = false) async throws {
         #if DEBUG
         print("═══════════════════════════════════════════════════════════════")
         print("[SyncService] SYNC TO MONEY FILE - HYBRID MODE")
+        print("[SyncService] Mode: \(directMode ? "DIRECT UPDATE" : "SAFE MODE")")
         print("[SyncService] .mny uses MSISAM encryption (incompatible with mdb-tools)")
         print("═══════════════════════════════════════════════════════════════")
         #endif
@@ -77,30 +87,60 @@ class SyncService {
             throw SyncError.noUnsyncedData
         }
         
-        // Step 2: Get .mny file path
+        // Step 2: Get the original .mny file from Documents (read-only)
         #if DEBUG
-        print("[SyncService] Getting .mny file...")
+        print("[SyncService] Getting original .mny file from Documents...")
         #endif
         
-        let mnyURL = try MoneyFileService.ensureLocalFile()
+        let originalMnyURL = try MoneyFileService.ensureLocalFile()
         
         #if DEBUG
-        print("[SyncService] .mny: \(mnyURL.path)")
+        print("[SyncService] Original .mny: \(originalMnyURL.path)")
         #endif
         
-        // Step 3: Get decrypted .mdb for metadata
+        // Step 3: Create a WORKING COPY in temp directory (avoid locking Documents file)
         #if DEBUG
-        print("[SyncService] Decrypting .mny for metadata...")
+        print("[SyncService] Creating working copy in temp directory...")
+        #endif
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let workingMnyURL = tempDir.appendingPathComponent("working_copy_\(UUID().uuidString).mny")
+        
+        try FileManager.default.copyItem(at: originalMnyURL, to: workingMnyURL)
+        
+        #if DEBUG
+        print("[SyncService] Working copy: \(workingMnyURL.path)")
+        #endif
+        
+        // Defer cleanup to ensure we always clean up temp files
+        defer {
+            #if DEBUG
+            print("[SyncService] 🧹 Cleaning up working copy...")
+            #endif
+            try? FileManager.default.removeItem(at: workingMnyURL)
+        }
+        
+        // Step 4: Decrypt working copy to get metadata
+        #if DEBUG
+        print("[SyncService] Decrypting working copy for metadata...")
         #endif
         
         let password = try PasswordStore.shared.load()
-        let mdbPath = try MoneyDecryptorBridge.decryptToTempFile(fromFile: mnyURL.path, password: password)
+        let mdbPath = try MoneyDecryptorBridge.decryptToTempFile(fromFile: workingMnyURL.path, password: password)
+        
+        // Defer cleanup of decrypted .mdb
+        defer {
+            #if DEBUG
+            print("[SyncService] 🧹 Cleaning up decrypted .mdb...")
+            #endif
+            try? FileManager.default.removeItem(atPath: mdbPath)
+        }
         
         #if DEBUG
         print("[SyncService] .mdb: \(mdbPath)")
         #endif
         
-        // Step 4: Get max transaction and payee IDs from Money file
+        // Step 5: Get max transaction and payee IDs from Money file
         #if DEBUG
         print("[SyncService] Reading max IDs from Money file...")
         #endif
@@ -149,24 +189,23 @@ class SyncService {
             nextId += 1
         }
         
-        // Step 5: Make .mny writable
-        // Step 5: Make .mny writable
-        try makeWritable(mnyURL.path)
+        // Step 6: Make working copy writable
+        try makeWritable(workingMnyURL.path)
         
         #if DEBUG
-        print("[SyncService] Made .mny writable")
+        print("[SyncService] Made working copy writable")
         #endif
         
-        // Step 6: Open in HYBRID mode
+        // Step 7: Open in HYBRID mode
         // - Read metadata from decrypted .mdb
-        // - Write data manually to .mny (pages 15+, unencrypted)
+        // - Write data manually to working copy of .mny (pages 15+, unencrypted)
         #if DEBUG
         print("[SyncService] Opening in HYBRID mode...")
         #endif
         
         let writer = try MDBToolsWriter(
-            mdbFilePath: mdbPath,        // Read metadata from decrypted .mdb
-            mnyFilePath: mnyURL.path     // Write data manually to .mny
+            mdbFilePath: mdbPath,              // Read metadata from decrypted .mdb
+            mnyFilePath: workingMnyURL.path    // Write data to WORKING COPY
         )
         
         // Insert payees first (transactions may reference them) with reassigned sequential IDs
@@ -336,19 +375,36 @@ class SyncService {
         print("[SyncService] ℹ️  Pages 15+ WRITTEN (plain text)")
         #endif
         
-        // Step 7: Upload modified .mny
-        // Step 7: Upload modified .mny
+        // Step 8: Upload modified working copy to OneDrive
         #if DEBUG
-        print("[SyncService] Uploading .mny to OneDrive...")
+        print("[SyncService] Uploading working copy to OneDrive...")
         #endif
         
-        try await uploadToOneDrive(mnyURL, asDecryptedMDB: false)
+        if directMode {
+            // Direct mode: overwrite original file
+            try await uploadToOriginalFile(workingMnyURL)
+        } else {
+            // Safe mode: upload as test file with timestamp
+            try await uploadToOneDrive(workingMnyURL, asDecryptedMDB: false)
+        }
         
         #if DEBUG
-        print("[SyncService] ✅ Uploaded")
+        print("[SyncService] ✅ Uploaded successfully")
         #endif
         
-        // Step 8: Mark synced
+        // Step 9: Clear local Documents file to force fresh download next time
+        // This releases the file lock and ensures we always have the latest version
+        #if DEBUG
+        print("[SyncService] 🧹 Clearing local Documents file to release lock...")
+        #endif
+        
+        OneDriveFileManager.shared.clearLocalFile()
+        
+        #if DEBUG
+        print("[SyncService] ✅ Local file cleared - next access will download fresh copy")
+        #endif
+        
+        // Step 10: Mark synced
         try LocalDatabaseManager.shared.markRecordsAsSynced()
         
         #if DEBUG
@@ -436,6 +492,61 @@ class SyncService {
         
         #if DEBUG
         print("[SyncService] ✅ Upload complete: \(uploadFileName)")
+        #endif
+    }
+    
+    /// Upload file to OneDrive, overwriting the original file
+    private func uploadToOriginalFile(_ fileURL: URL) async throws {
+        guard let originalFileName = OneDriveFileManager.shared.getSavedFileName() else {
+            throw SyncError.uploadFailed("No original file name saved")
+        }
+        
+        #if DEBUG
+        print("[SyncService] Uploading to original file: \(originalFileName)")
+        print("[SyncService] ⚠️  DIRECT MODE: Original file will be overwritten")
+        #endif
+        
+        // Get parent folder ID from saved file info
+        guard let parentFolderId = OneDriveFileManager.shared.getSavedParentFolderId() else {
+            throw SyncError.uploadFailed("No parent folder ID saved")
+        }
+        
+        // Get access token
+        let token = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            AuthManager.shared.acquireTokenSilent(scopes: ["Files.ReadWrite"]) { token, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let token = token else {
+                    continuation.resume(throwing: SyncError.uploadFailed("No access token"))
+                    return
+                }
+                
+                continuation.resume(returning: token)
+            }
+        }
+        
+        // Upload file with original name (this will overwrite)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            OneDriveAPI.uploadFile(
+                accessToken: token,
+                fileURL: fileURL,
+                fileName: originalFileName,  // Use original filename to overwrite
+                parentFolderId: parentFolderId
+            ) { result in
+                switch result {
+                case .success:
+                    continuation.resume()
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        
+        #if DEBUG
+        print("[SyncService] ✅ Upload complete: Original file overwritten")
         #endif
     }
 }
