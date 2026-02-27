@@ -11,7 +11,6 @@
 		DC1C37102EBC475E008C25B2 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = DC1C370F2EBC475E008C25B2 /* MSAL */; };
 		DC4E48EF2F19920300B37BF9 /* mdbtools-wrapper in Frameworks */ = {isa = PBXBuildFile; productRef = DC4E48EE2F19920300B37BF9 /* mdbtools-wrapper */; };
 		DCBB41722F0C878C00740D66 /* libmdbtools_c.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCBB415E2F0C707300740D66 /* libmdbtools_c.a */; };
-		DCCA90532F47F2D700F56855 /* IndexBTreeUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCCA90522F47F2D700F56855 /* IndexBTreeUpdater.swift */; };
 		DCF240682F2330A300F45C2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DCF2405E2F2330A300F45C2E /* Assets.xcassets */; };
 		DCF240882F2330A300F45C2E /* CheckbookAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */; };
 		DCF3E3AE2ED6660400B64E60 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = DCF3E3AD2ED6660400B64E60 /* BigInt */; };
@@ -53,7 +52,6 @@
 		DC0896262F1204A80014FCCC /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		DC59B70C2EB576080090E338 /* CheckbookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheckbookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBB415E2F0C707300740D66 /* libmdbtools_c.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libmdbtools_c.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		DCCA90522F47F2D700F56855 /* IndexBTreeUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexBTreeUpdater.swift; sourceTree = "<group>"; };
 		DCF2405E2F2330A300F45C2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DCF240602F2330A300F45C2E /* CheckbookApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CheckbookApp-Bridging-Header.h"; sourceTree = "<group>"; };
 		DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckbookAppApp.swift; sourceTree = "<group>"; };
@@ -147,7 +145,6 @@
 				NewTransactionView.swift,
 				SplashScreenView.swift,
 				SyncView.swift,
-				TIMEZONE_IMPLEMENTATION_SUMMARY.md,
 				TimezoneManager.swift,
 				TimezoneSelectionView.swift,
 				TransactionsView.swift,
@@ -282,7 +279,6 @@
 				DCF240602F2330A300F45C2E /* CheckbookApp-Bridging-Header.h */,
 				DCF240612F2330A300F45C2E /* CheckbookAppApp.swift */,
 				DCF240622F2330A300F45C2E /* Info.plist */,
-				DCCA90522F47F2D700F56855 /* IndexBTreeUpdater.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -413,7 +409,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				DCF240882F2330A300F45C2E /* CheckbookAppApp.swift in Sources */,
-				DCCA90532F47F2D700F56855 /* IndexBTreeUpdater.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

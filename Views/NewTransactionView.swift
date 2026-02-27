@@ -26,6 +26,8 @@ struct NewTransactionView: View {
     @State private var errorMessage: String?
     @State private var isSaving = false
     
+    @FocusState private var amountFieldFocused: Bool  // Track focus for amount field
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -33,6 +35,9 @@ struct NewTransactionView: View {
                 Section("Date") {
                     DatePicker("Transaction Date", selection: $date, displayedComponents: [.date])
                         .datePickerStyle(.compact)
+                        .onTapGesture {
+                            amountFieldFocused = false  // Dismiss keyboard when date picker is tapped
+                        }
                 }
                 
                 // Amount Section
@@ -43,6 +48,7 @@ struct NewTransactionView: View {
                         TextField("0.00", text: $amount)
                             .keyboardType(.decimalPad)
                             .font(.title3)
+                            .focused($amountFieldFocused)  // Bind focus state
                     }
                     
                     if let category = selectedCategory {
@@ -60,6 +66,7 @@ struct NewTransactionView: View {
                 Section("Category") {
                     Button {
                         if !isLoading {
+                            amountFieldFocused = false  // Dismiss keyboard
                             showingCategoryPicker = true
                         }
                     } label: {
@@ -89,6 +96,7 @@ struct NewTransactionView: View {
                 Section("Payee") {
                     Button {
                         if !isLoading {
+                            amountFieldFocused = false  // Dismiss keyboard
                             showingPayeePicker = true
                         }
                     } label: {
@@ -121,6 +129,13 @@ struct NewTransactionView: View {
                         dismiss()
                     }
                     .disabled(isSaving)
+                }
+                
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        amountFieldFocused = false  // Dismiss keyboard
+                    }
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {

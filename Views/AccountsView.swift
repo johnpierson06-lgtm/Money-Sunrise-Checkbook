@@ -171,7 +171,11 @@ struct AccountsView: View {
                             .foregroundColor(.gray)
                             .help("Sync is disabled because the file may be open on another device")
                         } else {
-                            NavigationLink(destination: SyncView().environmentObject(coordinator)) {
+                            NavigationLink(destination: SyncView(onSyncComplete: {
+                                // After sync, refresh the file from OneDrive
+                                // The sync service already cleared the local file, so this will download fresh copy
+                                refreshAccounts()
+                            }).environmentObject(coordinator)) {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                             }
                         }
@@ -341,8 +345,22 @@ struct AccountsView: View {
                 } else {
                     // After refresh, check for LRD file again (in case it changed)
                     self.checkForLRDFile()
-                    // Then prompt for password again
-                    self.showPasswordPrompt = true
+                    
+                    // Check if we have a saved password in keychain
+                    if let savedPassword = try? PasswordStore.shared.load() {
+                        // Use saved password automatically - no prompt needed
+                        #if DEBUG
+                        print("[AccountsView] 🔑 Using saved password for automatic reload")
+                        #endif
+                        self.enteredPassword = savedPassword
+                        self.handlePasswordSubmit(password: savedPassword)
+                    } else {
+                        // No saved password - prompt user
+                        #if DEBUG
+                        print("[AccountsView] 🔑 No saved password - prompting user")
+                        #endif
+                        self.showPasswordPrompt = true
+                    }
                 }
             }
         }

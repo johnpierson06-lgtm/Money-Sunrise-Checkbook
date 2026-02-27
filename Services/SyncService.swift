@@ -438,10 +438,18 @@ class SyncService {
     private func uploadToOneDrive(_ fileURL: URL, asDecryptedMDB: Bool = false) async throws {
         let timestamp = DateFormatter.yyyyMMddHHmmss.string(from: Date())
         
-        // Upload as .mdb with timestamp to avoid overwriting original
+        // Get the original file name (without extension)
+        guard let originalFileName = OneDriveFileManager.shared.getSavedFileName() else {
+            throw SyncError.uploadFailed("No original file name saved")
+        }
+        
+        // Remove the .mny extension from original filename
+        let originalNameWithoutExtension = (originalFileName as NSString).deletingPathExtension
+        
+        // Upload with _Safe_ suffix and timestamp
         let uploadFileName = asDecryptedMDB 
-            ? "Money_Test_\(timestamp).mdb"  // Upload as .mdb (unencrypted)
-            : "Money_Test_\(timestamp).mny"  // Upload as .mny (encrypted)
+            ? "\(originalNameWithoutExtension)_Safe_\(timestamp).mdb"  // Upload as .mdb (unencrypted)
+            : "\(originalNameWithoutExtension)_Safe_\(timestamp).mny"  // Upload as .mny (encrypted)
         
         #if DEBUG
         print("[SyncService] Uploading as: \(uploadFileName)")

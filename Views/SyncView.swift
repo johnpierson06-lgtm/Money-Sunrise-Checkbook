@@ -12,6 +12,8 @@ struct SyncView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var coordinator: AppCoordinator
     
+    var onSyncComplete: (() -> Void)? = nil  // Callback to refresh parent view
+    
     @State private var unsyncedTransactionCount: Int = 0
     @State private var unsyncedPayeeCount: Int = 0
     @State private var isLoading = true
@@ -19,7 +21,7 @@ struct SyncView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var syncProgress: String = ""
-    @State private var isDirectMode: Bool = false  // false = Safe Mode, true = Direct Update
+    @State private var isDirectMode: Bool = true  // false = Safe Mode, true = Direct Update
     
     var body: some View {
         NavigationStack {
@@ -131,19 +133,6 @@ struct SyncView: View {
                                 }
                                 
                                 HStack(spacing: 0) {
-                                    // Safe Mode Button
-                                    Button {
-                                        isDirectMode = false
-                                    } label: {
-                                        Text("Safe Mode")
-                                            .font(.subheadline)
-                                            .fontWeight(isDirectMode ? .regular : .semibold)
-                                            .foregroundColor(isDirectMode ? .primary : .white)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 12)
-                                            .background(isDirectMode ? Color.clear : Color.green)
-                                    }
-                                    
                                     // Direct Update Button
                                     Button {
                                         isDirectMode = true
@@ -155,6 +144,19 @@ struct SyncView: View {
                                             .frame(maxWidth: .infinity)
                                             .padding(.vertical, 12)
                                             .background(isDirectMode ? Color.orange : Color.clear)
+                                    }
+                                    
+                                    // Safe Mode Button
+                                    Button {
+                                        isDirectMode = false
+                                    } label: {
+                                        Text("Safe Mode")
+                                            .font(.subheadline)
+                                            .fontWeight(isDirectMode ? .regular : .semibold)
+                                            .foregroundColor(isDirectMode ? .primary : .white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(isDirectMode ? Color.clear : Color.green)
                                     }
                                 }
                                 .overlay(
@@ -199,12 +201,14 @@ struct SyncView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     SyncInfoRow(number: "1", text: "In Direct Mode, the transactions and payees are inserted directly to your original file")
                                     SyncInfoRow(number: "2", text: "Depending on your version of Money, you may need to goto 'File>Repair Money File>Quick File Repair' in order to see your transactions.")
+                                    SyncInfoRow(number: "3", text: "After sync the app will refresh and you will see your changes")
                                 }
                             } else {
                                 // Safe Mode
                                 VStack(alignment: .leading, spacing: 8) {
-                                    SyncInfoRow(number: "1", text: "In Safe Mode, new transactions and payees synchronized into a test file Money_Test_YYYYMMDD_hhmmss.mny")
+                                    SyncInfoRow(number: "1", text: "In Safe Mode, new transactions and payees are synchronized into a backup file with '_Safe_YYYYMMDD_hhmmss.mny' appended to your original filename")
                                     SyncInfoRow(number: "2", text: "Depending on your version of Money, you may need to goto 'File>Repair Money File>Quick File Repair' in order to see your transactions.")
+                                    SyncInfoRow(number: "3", text: "After sync the app will refresh, but you will not see your changes unless you select the new file that was uploaded to OneDrive")
                                 }
                             }
                         }
@@ -330,9 +334,16 @@ struct SyncView: View {
                     
                     #if DEBUG
                     print("[SyncView] ✅ Sync completed successfully")
+                    print("[SyncView] 🔄 Dismissing and refreshing parent view...")
                     #endif
                     
-                    // Don't auto-dismiss - let user read the message
+                    // Dismiss the sync view and trigger refresh
+                    dismiss()
+                    
+                    // Trigger refresh callback on the parent view
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        onSyncComplete?()
+                    }
                 }
             } catch SyncService.SyncError.noUnsyncedData {
                 await MainActor.run {
